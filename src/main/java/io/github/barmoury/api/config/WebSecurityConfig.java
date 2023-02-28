@@ -1,8 +1,12 @@
 package io.github.barmoury.api.config;
 
+import io.github.barmoury.api.persistence.EloquentQuery;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer;
@@ -17,11 +21,21 @@ import org.springframework.web.filter.CorsFilter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class WebSecurityConfig {
 
     @Autowired
+    Environment environment;
+
+    @Autowired
+    EntityManager entityManager;
+
+    @Autowired
     private JwtRequestFilter jwtRequestFilter;
+
+    @Autowired
+    AutowireCapableBeanFactory autowireCapableBeanFactory;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -67,6 +81,15 @@ public class WebSecurityConfig {
         config.addAllowedMethod("*");
         source.registerCorsConfiguration("/**", config);
         return new CorsFilter(source);
+    }
+
+    @Bean
+    void setupEloquentQuery() {
+        EloquentQuery.setSuperEntityManager(entityManager);
+        EloquentQuery.setAutowireCapableBeanFactory(autowireCapableBeanFactory);
+        String namingStrategy = environment.getProperty("spring.jackson.property-naming-strategy");
+        if (namingStrategy != null) EloquentQuery.setSnakeCase(namingStrategy
+                .equalsIgnoreCase("SNAKE_CASE"));
     }
 
 }

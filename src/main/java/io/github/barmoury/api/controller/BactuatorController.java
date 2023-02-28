@@ -3,6 +3,7 @@ package io.github.barmoury.api.controller;
 import io.github.barmoury.api.exception.InvalidBactuatorQueryException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import org.apache.logging.log4j.Logger;
 import org.springframework.http.HttpStatus;
@@ -54,10 +55,10 @@ public abstract class BactuatorController {
 
     public abstract <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message);
 
-    public abstract boolean principalCan(Authentication authentication, String dbMethod);
+    public abstract boolean principalCan(HttpServletRequest httpServletRequest, String dbMethod);
 
     @RequestMapping(value = "/health", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> healthCheck(Authentication authentication) {
+    public ResponseEntity<?> healthCheck() {
         Map<String, Object> response = new HashMap<>();
         boolean serviceIsOk = isServiceOk();
         response.put("status", serviceIsOk ? "ok" : "not ok");
@@ -66,7 +67,7 @@ public abstract class BactuatorController {
     }
 
     @RequestMapping(value = "/introspect", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> introspect(Authentication authentication) {
+    public ResponseEntity<?> introspect() {
         Map<String, Object> response = new HashMap<>();
         response.put("name", serviceName());
         response.put("description", serviceDescription());
@@ -81,32 +82,32 @@ public abstract class BactuatorController {
         return processResponse(HttpStatus.OK, response, "introspect data fetched successfully");
     }
 
-    Object executeQueryForResult(Authentication authentication, String queryString, boolean includeColumnNames) {
+    Object executeQueryForResult(HttpServletRequest httpServletRequest, String queryString, boolean includeColumnNames) {
         try {
             Query query = getEntityManager().createNativeQuery(queryString);
             if (queryString.toLowerCase().contains("update")) {
-                if (!principalCan(authentication, "UPDATE")) {
+                if (!principalCan(httpServletRequest, "UPDATE")) {
                     throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "UPDATE"));
                 }
                 return query.executeUpdate();
 
             } else if (queryString.toLowerCase().contains("delete")) {
-                if (!principalCan(authentication, "DELETE")) {
+                if (!principalCan(httpServletRequest, "DELETE")) {
                     throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "DELETE"));
                 }
                 return query.executeUpdate();
             } else if (queryString.toLowerCase().contains("insert")) {
-                if (!principalCan(authentication, "INSERT")) {
+                if (!principalCan(httpServletRequest, "INSERT")) {
                     throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "INSERT"));
                 }
                 return query.executeUpdate();
             } else if (queryString.toLowerCase().contains("truncate")) {
-                if (!principalCan(authentication, "TRUNCATE")) {
+                if (!principalCan(httpServletRequest, "TRUNCATE")) {
                     throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "TRUNCATE"));
                 }
                 return query.executeUpdate();
             }
-            if (!principalCan(authentication, "SELECT")) {
+            if (!principalCan(httpServletRequest, "SELECT")) {
                 throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "SELECT"));
             }
             if (!includeColumnNames) {
@@ -132,9 +133,9 @@ public abstract class BactuatorController {
 
     @RequestMapping(value = "/database/query/single", method = RequestMethod.POST,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> executeSingleQueries(Authentication authentication,
+    public ResponseEntity<?> executeSingleQueries(HttpServletRequest httpServletRequest,
                                                   @RequestBody Map<String, String> body) {
-        Object result = executeQueryForResult(authentication,
+        Object result = executeQueryForResult(httpServletRequest,
                 body.get("query"),
                 body.getOrDefault("include_column_names", "false").equalsIgnoreCase("true"));
         return processResponse(HttpStatus.OK, result, SQL_QUERY_SUCCESSFUL);
@@ -142,14 +143,14 @@ public abstract class BactuatorController {
 
     @RequestMapping(value = "/database/query/multiple", method = RequestMethod.POST,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> executeMultipleQueries(Authentication authentication,
+    public ResponseEntity<?> executeMultipleQueries(HttpServletRequest httpServletRequest,
                                                   @RequestBody Map<String, Object> body) {
         Map<String, Object> response = new HashMap<>();
         boolean includeColumnNames = (boolean) body.getOrDefault("include_column_names", false);
         List<String> queryStrings = (List<String>) body.getOrDefault("queries", new ArrayList<>());
         for (String queryString : queryStrings) {
             try {
-                Object result = executeQueryForResult(authentication, queryString, includeColumnNames);
+                Object result = executeQueryForResult(httpServletRequest, queryString, includeColumnNames);
                 response.put(queryString, result);
             } catch (Exception ex) {
                 response.put(queryString, ex.getMessage());

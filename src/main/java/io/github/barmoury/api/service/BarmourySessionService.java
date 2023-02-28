@@ -15,7 +15,6 @@ import io.github.barmoury.api.repository.BarmourySessionRepository;
 import java.util.Date;
 import java.util.Optional;
 
-@Getter
 public abstract class BarmourySessionService<T extends BarmourySession<?>> {
 
     public abstract T initializeSession();
@@ -49,15 +48,15 @@ public abstract class BarmourySessionService<T extends BarmourySession<?>> {
         UserAgent userAgent = uaa.parse(httpServletRequest.getHeader("User-Agent"));
 
         BarmourySession.Device device = new BarmourySession.Device();
-        device.setBrowserName(userAgent.getValue("Agent Name"));
-        device.setDeviceName(userAgent.getValue("Device Name"));
-        device.setDeviceType(userAgent.getValue("Device Brand"));
-        device.setDeviceClass(userAgent.getValue("Device Class"));
-        device.setBrowserVersion(userAgent.getValue("Agent Version"));
-        device.setOsName(userAgent.getValue("Operating System Name"));
-        device.setEngineName(userAgent.getValue("Layout Engine Name"));
-        device.setOsVersion(userAgent.getValue("Operating System Version"));
-        device.setEngineVersion(userAgent.getValue("Layout Engine Version"));
+        device.setBrowserName(userAgent.getValue("AgentName"));
+        device.setDeviceName(userAgent.getValue("DeviceName"));
+        device.setDeviceType(userAgent.getValue("DeviceBrand"));
+        device.setDeviceClass(userAgent.getValue("DeviceClass"));
+        device.setBrowserVersion(userAgent.getValue("AgentVersion"));
+        device.setOsName(userAgent.getValue("OperatingSystemName"));
+        device.setEngineName(userAgent.getValue("LayoutEngineName"));
+        device.setOsVersion(userAgent.getValue("OperatingSystemVersion"));
+        device.setEngineVersion(userAgent.getValue("LayoutEngineVersion"));
 
         T barmourySession = this.initializeSession();
         barmourySession.setActorId(actorId);
@@ -72,8 +71,14 @@ public abstract class BarmourySessionService<T extends BarmourySession<?>> {
     }
 
     public T updateSession(T barmourySession, String authToken) {
+        barmourySession.setUpdatedAt(new Date());
         barmourySession.setLastAuthToken(authToken);
         barmourySession.setRefreshCount(barmourySession.getRefreshCount() + 1);
+        return getBarmourySessionRepository().saveAndFlush(barmourySession);
+    }
+
+    public T save(T barmourySession) {
+        barmourySession.setUpdatedAt(new Date());
         return getBarmourySessionRepository().saveAndFlush(barmourySession);
     }
 

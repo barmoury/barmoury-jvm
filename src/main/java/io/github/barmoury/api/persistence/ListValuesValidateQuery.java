@@ -18,33 +18,32 @@ import java.util.List;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
-@Constraint(validatedBy = ListValuesExists.ListValuesExistsValidator.class)
-public @interface ListValuesExists {
+@Constraint(validatedBy = ListValuesValidateQuery.Validator.class)
+public @interface ListValuesValidateQuery {
 
     String message();
-    Class<?>[] groups() default {};
-    Class<? extends Payload>[] payload() default {};
     String table() default "";
-    String where() default "";
-    String column();
+    Class<?>[] groups() default {};
+    String[] orClauses() default {};
+    String[] andClauses() default {};
+    Class<? extends Payload>[] payload() default {};
 
-    class ListValuesExistsValidator implements ConstraintValidator<ListValuesExists, Object> {
+    class Validator implements ConstraintValidator<ListValuesValidateQuery, Object> {
 
-        String table;
-        String where;
-        String column;
-        Class<?>[] groups;
+        ValidateQuery.Validator validator;
 
         @Autowired
         EntityManager entityManager;
 
         @Override
-        public void initialize(ListValuesExists constraintAnnotation) {
+        public void initialize(ListValuesValidateQuery constraintAnnotation) {
             ConstraintValidator.super.initialize(constraintAnnotation);
-            this.table = constraintAnnotation.table();
-            this.where = constraintAnnotation.where();
-            this.column = constraintAnnotation.column();
-            this.groups = constraintAnnotation.groups();
+            this.validator = new ValidateQuery.Validator();
+            this.validator.entityManager = this.entityManager;
+            this.validator.table = constraintAnnotation.table();
+            this.validator.groups = constraintAnnotation.groups();
+            this.validator.orClauses = constraintAnnotation.orClauses();
+            this.validator.andClauses = constraintAnnotation.andClauses();
         }
 
         @Override
@@ -56,13 +55,7 @@ public @interface ListValuesExists {
             }
             List<?> values = (List<?>) o;
             for (Object value : values) {
-                String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :value", table, column);
-                queryString = String.format("%s %s ", queryString, this.where);
-                Query countQuery = entityManager.createNativeQuery(queryString);
-                countQuery.setParameter("value", value);
-                if (((Number) countQuery.getSingleResult()).intValue() == 0) {
-                    ((ConstraintValidatorContextImpl) constraintValidatorContext)
-                            .addMessageParameter("value", String.valueOf(value));
+                if (!validator.isValid(value, constraintValidatorContext)) {
                     return false;
                 }
             }

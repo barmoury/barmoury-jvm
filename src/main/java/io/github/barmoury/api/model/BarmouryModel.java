@@ -18,11 +18,11 @@ public class BarmouryModel {
 
     @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
     @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
-    Date createdAt;
+    Date createdAt = new Date();
 
     @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
     @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
-    Date updatedAt;
+    Date updatedAt = new Date();
 
     public BarmouryModel resolve(Request baseRequest) {
         Copier.copy(this, baseRequest);

@@ -1,8 +1,13 @@
 package io.github.barmoury.api.controller;
 
+import io.github.barmoury.api.model.BarmouryUserDetails;
 import io.github.barmoury.api.persistence.EloquentQuery;
 import io.github.barmoury.api.ValidationGroups;
 import io.github.barmoury.api.model.BarmouryModel;
+import jakarta.annotation.PostConstruct;
+import jakarta.persistence.Entity;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.validator.HibernateValidatorFactory;
@@ -13,7 +18,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.annotation.Secured;
 import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Repository;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import org.springframework.web.bind.annotation.*;
@@ -24,66 +32,65 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-public abstract class BarmouryController<Entity extends BarmouryModel, EntityRequest extends BarmouryModel.Request> {
+// TODO validate list of entity for multiple
+public abstract class BarmouryController<Resource extends BarmouryModel, ResourceRequest extends BarmouryModel.Request> {
 
-    @Setter String tableName;
-    @Getter @Setter String fineName;
-    final String NO_RESOURCE_FORMAT_STRING = "No %s found with the specified id";
-    @Setter Class<Entity> entityClass;
+    String tableName;
+    String fineName;
+    Class<Resource> entityClass;
     @Autowired EntityManager entityManager;
-    @Setter JpaRepository<Entity, Long> repository;
-    Map<String, String> statMap = new HashMap<>();
+    JpaRepository<Resource, Long> repository;
     @Autowired LocalValidatorFactoryBean localValidatorFactoryBean;
+    static final String NO_RESOURCE_FORMAT_STRING = "No %s found with the specified id";
 
-    public BarmouryController() {
-        statMap.put("total_count", "");
-    }
-
-    public void putStatColumn(String key, String value) {
-        statMap.put(key, value);
-    }
-
-    public String removeStatColumn(String key) {
-        return statMap.remove(key);
-    }
-
-    public String validateBeforeCommit(Entity r) {
+    public String validateBeforeCommit(Resource r) {
         if (r == null) return "Invalid entity";
         return null;
     }
 
-    public void preCreate(HttpServletRequest request, Entity entity, EntityRequest entityRequest) {}
+    public void setup(Class<Resource> entityClass, JpaRepository<Resource, Long> repository) {
+        this.repository = repository;
+        this.entityClass = entityClass;
+        Entity entity = this.entityClass.getAnnotation(Entity.class);
+        this.tableName = entity.name();
+        this.fineName = this.entityClass.getSimpleName();
+    }
 
-    public void postCreate(HttpServletRequest request, Entity entity) {}
+    public void preCreate(HttpServletRequest request, Authentication authentication, Resource entity, ResourceRequest entityRequest) {}
 
-    public void preUpdate(HttpServletRequest request, Entity entity, EntityRequest entityRequest) {}
+    public void postCreate(HttpServletRequest request, Authentication authentication, Resource entity) {}
 
-    public void postUpdate(HttpServletRequest request, Entity entity) {}
+    public void preUpdate(HttpServletRequest request, Authentication authentication, Resource entity, ResourceRequest entityRequest) {}
 
-    public void preDelete(HttpServletRequest request, Entity entity, long id) {}
+    public void postUpdate(HttpServletRequest request, Authentication authentication, Resource entity) {}
 
-    public void postDelete(HttpServletRequest request, Entity entity) {}
+    public void preDelete(HttpServletRequest request, Authentication authentication, Resource entity, long id) {}
+
+    public void postDelete(HttpServletRequest request, Authentication authentication, Resource entity) {}
 
     public abstract <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message);
 
+    public abstract String[] getRouteMethodRoles(RouteMethod routeMethod);
+
     @RequestMapping(value = "/stat", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> stat(Authentication authentication, HttpServletRequest request) {
-        if (statMap == null) {
-            throw new UnsupportedOperationException(
-                    String.format("The /stat route is not supported for %s", fineName));
+    public ResponseEntity<?> stat(HttpServletRequest request) {
+        String[] roles = getRouteMethodRoles(RouteMethod.STAT);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
+            throw new AccessDeniedException("Access denied. You do not have the required role to access this endpoint");
         }
-        return processResponse(HttpStatus.OK, EloquentQuery.getResourceStat(entityManager, tableName,
-                statMap, request), String.format("%s stat fetched successfully", this.fineName));
+        return processResponse(HttpStatus.OK, EloquentQuery.getResourceStat(entityManager, request, tableName,
+                entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
     @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> index(Authentication authentication, HttpServletRequest request, Pageable pageable) {
-        Page<Entity> clientCategories = EloquentQuery.buildQueryForPage(
+    public ResponseEntity<?> index(HttpServletRequest request, Pageable pageable) {
+        String[] roles = getRouteMethodRoles(RouteMethod.INDEX);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
+            throw new AccessDeniedException("Access denied. You do not have the required role to access this endpoint");
+        }
+        Page<Resource> clientCategories = EloquentQuery.buildQueryForPage(
                 entityManager, tableName, entityClass,
                 request, pageable);
         return processResponse(HttpStatus.OK, clientCategories, String.format("%s list fetched successfully",
@@ -92,57 +99,117 @@ public abstract class BarmouryController<Entity extends BarmouryModel, EntityReq
 
     @SuppressWarnings("unchecked")
     @RequestMapping(method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> store(Authentication authentication, HttpServletRequest httpServletRequest,
+    public ResponseEntity<?> store(HttpServletRequest httpServletRequest, Authentication authentication,
                                    @Validated(ValidationGroups.Create.class) @RequestBody
-                                   EntityRequest request)
+                                   ResourceRequest request)
             throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
 
-        Entity resource = (Entity) entityClass.getDeclaredConstructor().newInstance().resolve(request);
-        this.preCreate(httpServletRequest, resource, request);
+        String[] roles = getRouteMethodRoles(RouteMethod.STORE);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
+            throw new AccessDeniedException("Access denied. You do not have the required role to access this endpoint");
+        }
+        Resource resource = (Resource) entityClass.getDeclaredConstructor().newInstance().resolve(request);
+        this.preCreate(httpServletRequest, authentication, resource, request);
         String msg = validateBeforeCommit(resource);
         if (msg != null) throw new IllegalArgumentException(msg);
         repository.saveAndFlush(resource);
-        this.postCreate(httpServletRequest, resource);
+        this.postCreate(httpServletRequest, authentication, resource);
         return processResponse(HttpStatus.CREATED, resource, String.format("%s created successfully", this.fineName));
     }
 
+    @SuppressWarnings("unchecked")
+    @RequestMapping(value = "/multiple", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> store(HttpServletRequest httpServletRequest, Authentication authentication,
+                                   @Validated(ValidationGroups.Create.class)
+                                   @Valid @NotEmpty(message = "The request list cannot be empty") @RequestBody
+                                   List<@Valid ResourceRequest> entityRequests)
+            throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
+
+        String[] roles = getRouteMethodRoles(RouteMethod.STORE_MULTIPLE);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
+            throw new AccessDeniedException("Access denied. You do not have the required role to access this endpoint");
+        }
+        List<Object> entities = new ArrayList<>();
+        for (ResourceRequest entityRequest : entityRequests) {
+            Resource resource = (Resource) entityClass.getDeclaredConstructor().newInstance().resolve(entityRequest);
+            this.preCreate(httpServletRequest, authentication, resource, entityRequest);
+            String msg = validateBeforeCommit(resource);
+            if (msg != null) {
+                entities.add(resource);
+                continue;
+            }
+            try {
+                resource = repository.saveAndFlush(resource);
+            } catch (Exception exception) {
+                entities.add(exception.getMessage());
+                continue;
+            }
+            this.postCreate(httpServletRequest, authentication, resource);
+            entities.add(resource);
+        }
+        return processResponse(HttpStatus.CREATED, entities,
+                String.format("the %s(s) are created successfully", this.fineName));
+    }
+
     @RequestMapping(value = "/{id}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> show(Authentication authentication, HttpServletRequest request, @PathVariable long id) {
+    public ResponseEntity<?> show(HttpServletRequest request, @PathVariable long id) {
+        String[] roles = getRouteMethodRoles(RouteMethod.SHOW);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
+            throw new AccessDeniedException("Access denied. You do not have the required role to access this endpoint");
+        }
         return processResponse(HttpStatus.OK,
                 EloquentQuery.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName)),
                 String.format("%s fetch successfully", this.fineName));
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.PATCH, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> update(Authentication authentication, HttpServletRequest httpServletRequest,
-                                    @PathVariable long id, @RequestBody EntityRequest request) {
+    public ResponseEntity<?> update(HttpServletRequest httpServletRequest, Authentication authentication,
+                                    @PathVariable long id, @RequestBody ResourceRequest request) {
 
-        Entity resource = EloquentQuery.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
+        String[] roles = getRouteMethodRoles(RouteMethod.UPDATE);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
+            throw new AccessDeniedException("Access denied. You do not have the required role to access this endpoint");
+        }
+        Resource resource = EloquentQuery.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
         resource.resolve(request);
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
                 .constraintValidatorPayload((resource).getId())
                 .getValidator();
-        List<ConstraintViolation<EntityRequest>> errors =
+        List<ConstraintViolation<ResourceRequest>> errors =
                 new ArrayList<>(validator.validate(request, ValidationGroups.Update.class));
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(errors.get(0).getMessage());
         }
-        this.preUpdate(httpServletRequest, resource, request);
+        this.preUpdate(httpServletRequest, authentication, resource, request);
         String msg = validateBeforeCommit(resource);
         if (msg != null) throw new IllegalArgumentException(msg);
         repository.saveAndFlush(resource);
-        this.postUpdate(httpServletRequest, resource);
+        this.postUpdate(httpServletRequest, authentication, resource);
         return processResponse(HttpStatus.OK, resource, String.format("%s updated successfully", this.fineName));
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> delete(Authentication authentication, HttpServletRequest request, @PathVariable long id) {
-        Entity resource = EloquentQuery.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
-        this.preDelete(request, resource, id);
+    public ResponseEntity<?> delete(HttpServletRequest request, Authentication authentication, @PathVariable long id) {
+        String[] roles = getRouteMethodRoles(RouteMethod.DELETE);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
+            throw new AccessDeniedException("Access denied. You do not have the required role to access this endpoint");
+        }
+        Resource resource = EloquentQuery.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
+        this.preDelete(request, authentication, resource, id);
         repository.delete(resource);
-        this.postDelete(request, resource);
+        this.postDelete(request, authentication, resource);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    public enum RouteMethod {
+        STAT,
+        SHOW,
+        INDEX,
+        STORE,
+        UPDATE,
+        DELETE,
+        STORE_MULTIPLE
     }
 
 }

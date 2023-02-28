@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.UnexpectedRollbackException;
+import org.springframework.validation.BindException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.method.annotation.MethodArgumentConversionNotSupportedException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.nio.file.AccessDeniedException;
@@ -38,7 +40,18 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
         String errorMessage = (!ex.getBindingResult().getAllErrors().isEmpty() ?
                 ex.getBindingResult().getAllErrors().get(0).getDefaultMessage():
                 "");
-        getLogger().error(ex.getMessage(), ex);
+        //getLogger().error(ex.getMessage(), ex);
+        return processResponse(errorMessage, false);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(BindException.class)
+    public <T> T handleValidationExceptions(BindException ex) {
+        String errorMessage = (!ex.getBindingResult().getAllErrors().isEmpty() ?
+                ex.getBindingResult().getAllErrors().get(0).getDefaultMessage():
+                "");
+        //getLogger().error(ex.getMessage(), ex);
         return processResponse(errorMessage, false);
     }
 
@@ -62,7 +75,15 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public <T> T handleException(AccessDeniedException ex) {
         getLogger().error(ex.getMessage(), ex);
-        return processResponse("Access denied. You do not have access to this resource", false);
+        return processResponse("Access denied. You do not have access to this file", false);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public <T> T handleException(org.springframework.security.access.AccessDeniedException ex) {
+        getLogger().error(ex.getMessage(), ex);
+        return processResponse("Access denied. You do not have the required access", false);
     }
 
     @ResponseBody
@@ -182,6 +203,16 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public <T> T handleException(SubModelResolveException ex) {
         getLogger().error(ex.getMessage(), ex);
         return processResponse("Invalid field specified when updating " + ex.getEntity(), false);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public <T> T handleException(MethodArgumentTypeMismatchException ex) {
+        getLogger().error(ex.getMessage(), ex);
+        return processResponse(String.format("Unable to convert the parameter '%s' to the required type '%s' " +
+                "", ex.getValue(),
+                ex.getParameter().getGenericParameterType().getTypeName()), false);
     }
 
     @ResponseBody

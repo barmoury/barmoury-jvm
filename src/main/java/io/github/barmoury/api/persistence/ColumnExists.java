@@ -18,7 +18,7 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
-@Constraint(validatedBy = ColumnExists.ColumnUniqueValidator.class)
+@Constraint(validatedBy = ColumnExists.Validator.class)
 public @interface ColumnExists {
 
     String message();
@@ -28,7 +28,7 @@ public @interface ColumnExists {
     String where() default "";
     String column();
 
-    class ColumnUniqueValidator implements ConstraintValidator<ColumnExists, Object> {
+    class Validator implements ConstraintValidator<ColumnExists, Object> {
 
         String table;
         String where;
@@ -63,10 +63,10 @@ public @interface ColumnExists {
             if (countValue == 0) {
                 if (constraintValidatorContext instanceof ConstraintValidatorContextImpl) {
                     ((ConstraintValidatorContextImpl) constraintValidatorContext)
-                            .addMessageParameter("value", o);
+                            .addMessageParameter("value", String.valueOf(o));
                 }
             }
-            return false;
+            return countValue > 0;
         }
     }
 

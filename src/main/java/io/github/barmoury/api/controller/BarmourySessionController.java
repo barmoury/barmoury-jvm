@@ -32,7 +32,7 @@ public abstract class BarmourySessionController<T extends BarmourySession<?>> ex
 
     @Override
     @RequestMapping(method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> store(Authentication authentication, HttpServletRequest httpServletRequest,
+    public ResponseEntity<?> store(HttpServletRequest httpServletRequest, Authentication authentication,
                                    @Validated(ValidationGroups.Create.class) @RequestBody
                                    BarmouryModel.Request request) {
         throw new UnsupportedOperationException("you cannot manually create a session");
@@ -40,7 +40,7 @@ public abstract class BarmourySessionController<T extends BarmourySession<?>> ex
 
     @Override
     @RequestMapping(value = "/{id}", method = RequestMethod.PATCH, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> update(Authentication authentication, HttpServletRequest httpServletRequest,
+    public ResponseEntity<?> update(HttpServletRequest httpServletRequest, Authentication authentication,
                                     @PathVariable long id, @RequestBody BarmouryModel.Request request) {
         throw new UnsupportedOperationException("a session cannot be updated");
     }

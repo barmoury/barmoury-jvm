@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
-@Constraint(validatedBy = ColumnUnique.ColumnUniqueValidator.class)
+@Constraint(validatedBy = ColumnUnique.Validator.class)
 public @interface ColumnUnique {
 
     String message();
@@ -28,7 +28,7 @@ public @interface ColumnUnique {
     String column();
     boolean nullable() default false;
 
-    class ColumnUniqueValidator implements ConstraintValidator<ColumnUnique, Object> {
+    class Validator implements ConstraintValidator<ColumnUnique, Object> {
 
         boolean nullable;
         String table;
@@ -69,7 +69,7 @@ public @interface ColumnUnique {
             if (countValue > 0) {
                 if (constraintValidatorContext instanceof ConstraintValidatorContextImpl) {
                     ((ConstraintValidatorContextImpl) constraintValidatorContext)
-                            .addMessageParameter("value", o);
+                            .addMessageParameter("value", String.valueOf(o));
                 }
                 return false;
             }

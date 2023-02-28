@@ -26,6 +26,7 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
 
     public abstract String getContextPath();
     public abstract JwtTokenUtil getJwtTokenUtil();
+    public abstract boolean validate(HttpServletRequest httpServletRequest, BarmouryUserDetails<?> userDetails);
     public abstract void processResponse(HttpServletResponse httpServletResponse, String message) throws IOException;
 
     public String getAuthoritiesPrefix() {
@@ -33,7 +34,8 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse,
+    protected void doFilterInternal(HttpServletRequest httpServletRequest,
+                                    HttpServletResponse httpServletResponse,
                                     FilterChain filterChain) throws ServletException, IOException {
         final String header = httpServletRequest.getHeader(HttpHeaders.AUTHORIZATION);
         if (header == null || !header.startsWith("Bearer ")) {
@@ -56,6 +58,12 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
         }
 
         barmouryUserDetails.setAuthorityPrefix(getAuthoritiesPrefix());
+        if (!validate(httpServletRequest, barmouryUserDetails)) {
+            httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            processResponse(httpServletResponse, "user details validation failed");
+            return;
+        }
+
         UsernamePasswordAuthenticationToken
                 authentication = new UsernamePasswordAuthenticationToken(
                 barmouryUserDetails, null,

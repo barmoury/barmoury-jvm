@@ -25,7 +25,7 @@ public abstract class EncryptorObjectConverter<T> implements AttributeConverter<
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public T convertToEntityAttribute(String s) {
-        return (T) objectMapper.readValue(getEncryptor().encrypt(s), Object.class);
+        return (T) objectMapper.readValue(getEncryptor().decrypt(s), Object.class);
     }
 
 }
