@@ -1,7 +1,7 @@
-package io.github.barmoury.api.converters;
+package io.github.barmoury.converter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.barmoury.crypto.BarmouryEncryptor;
+import io.github.barmoury.crypto.Encryptor;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import lombok.SneakyThrows;
@@ -13,7 +13,7 @@ public abstract class EncryptorObjectConverter<T> implements AttributeConverter<
     @Autowired
     public ObjectMapper objectMapper;
 
-    public abstract BarmouryEncryptor<String> getEncryptor();
+    public abstract Encryptor<String> getEncryptor();
 
     @Override
     @SneakyThrows

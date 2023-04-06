@@ -1,6 +1,6 @@
 package io.github.barmoury.api.repository;
 
-import io.github.barmoury.api.model.BarmourySession;
+import io.github.barmoury.api.model.Session;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,7 +15,7 @@ import java.util.Optional;
 
 @Repository
 @Transactional
-public interface BarmourySessionRepository<T extends BarmourySession<?>>
+public interface BarmourySessionRepository<T extends Session<?>>
         extends JpaRepository<T, Long>, PagingAndSortingRepository<T, Long>  {
 
     Page<T> findAllBySessionIdAndStatus(String sessionId, String status, Pageable pageable);

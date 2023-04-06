@@ -6,7 +6,6 @@ import io.github.barmoury.api.exception.SubModelResolveException;
 import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.persistence.EntityNotFoundException;
-import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.http.HttpStatus;
@@ -14,6 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.validation.BindException;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -27,208 +27,253 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.nio.file.AccessDeniedException;
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.List;
 
 public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
 
-    public abstract Logger getLogger();
-    public abstract <T> T processResponse(String message, boolean success);
+    public abstract Object processResponse(Exception ex, List<Object> errors);
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public <T> T handleValidationExceptions(MethodArgumentNotValidException ex) {
-        String errorMessage = (!ex.getBindingResult().getAllErrors().isEmpty() ?
-                ex.getBindingResult().getAllErrors().get(0).getDefaultMessage():
-                "");
-        //getLogger().error(ex.getMessage(), ex);
-        return processResponse(errorMessage, false);
+    public Object handleValidationExceptions(MethodArgumentNotValidException ex) {
+        List<Object> errors = new ArrayList<>();
+        for (ObjectError objectError : ex.getBindingResult().getAllErrors()) {
+            errors.add(objectError.getDefaultMessage());
+        }
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(BindException.class)
-    public <T> T handleValidationExceptions(BindException ex) {
-        String errorMessage = (!ex.getBindingResult().getAllErrors().isEmpty() ?
-                ex.getBindingResult().getAllErrors().get(0).getDefaultMessage():
-                "");
-        //getLogger().error(ex.getMessage(), ex);
-        return processResponse(errorMessage, false);
+    public Object handleValidationExceptions(BindException ex) {
+        List<Object> errors = new ArrayList<>();
+        for (ObjectError objectError : ex.getBindingResult().getAllErrors()) {
+            errors.add(objectError.getDefaultMessage());
+        }
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(IllegalArgumentException.class)
-    public <T> T handleException(IllegalArgumentException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(IllegalArgumentException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.NOT_IMPLEMENTED)
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public <T> T handleException(HttpRequestMethodNotSupportedException ex) {
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(HttpRequestMethodNotSupportedException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     @ExceptionHandler(AccessDeniedException.class)
-    public <T> T handleException(AccessDeniedException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Access denied. You do not have access to this file", false);
+    public Object handleException(AccessDeniedException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Access denied. You do not have access to this file");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.FORBIDDEN)
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
-    public <T> T handleException(org.springframework.security.access.AccessDeniedException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Access denied. You do not have the required access", false);
+    public Object handleException(org.springframework.security.access.AccessDeniedException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Access denied. You do not have the required access");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public <T> T handleException(MissingServletRequestParameterException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(MissingServletRequestParameterException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     @ExceptionHandler(Exception.class)
-    public <T> T handleException(Exception ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Internal server error occur", false);
+    public Object handleException(Exception ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Internal server error occur");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    @ExceptionHandler(NullPointerException.class)
+    public Object handleException(NullPointerException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Internal server error occur");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public <T> T handleException(HttpMediaTypeNotSupportedException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(HttpMediaTypeNotSupportedException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public <T> T handleException(HttpMessageNotReadableException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("The request body is missing or is invalid", false);
+    public Object handleException(HttpMessageNotReadableException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("The request body is missing or is invalid");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(InvalidDataAccessResourceUsageException.class)
-    public <T> T handleException(InvalidDataAccessResourceUsageException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Invalid parameter, especially in the value of sort parameter", false);
+    public Object handleException(InvalidDataAccessResourceUsageException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Invalid parameter, especially when querying an invalid column");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(MethodArgumentConversionNotSupportedException.class)
-    public <T> T handleException(MethodArgumentConversionNotSupportedException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Invalid parameter, check the values and try again", false);
+    public Object handleException(MethodArgumentConversionNotSupportedException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Invalid parameter, check the values and try again");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(EntityNotFoundException.class)
-    public <T> T handleException(EntityNotFoundException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(EntityNotFoundException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.FORBIDDEN)
     @ExceptionHandler(UnsupportedOperationException.class)
-    public <T> T handleException(UnsupportedOperationException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(UnsupportedOperationException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public <T> T handleException(DataIntegrityViolationException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Duplicate or constraint error occur while saving the resource. " +
-                "Check your request payload", false);
+    public Object handleException(DataIntegrityViolationException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Duplicate or constraint error occur while saving the resource. Check your request payload");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ParseException.class)
+    public Object handleException(ParseException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("An error occur while trying to parse an input, request query params. " + ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     @ExceptionHandler(JpaSystemException.class)
-    public <T> T handleException(JpaSystemException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Error occur during persistence. Contact support", false);
+    public Object handleException(JpaSystemException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Error occur during persistence. Contact support");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.CONFLICT)
     @ExceptionHandler(CopierException.class)
-    public <T> T handleException(CopierException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(CopierException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(UnexpectedRollbackException.class)
-    public <T> T handleException(UnexpectedRollbackException ex) {
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(UnexpectedRollbackException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(InvalidBactuatorQueryException.class)
-    public <T> T handleException(InvalidBactuatorQueryException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(InvalidBactuatorQueryException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     @ExceptionHandler(InvalidLoginException.class)
-    public <T> T handleException(InvalidLoginException ex) {
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(InvalidLoginException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(SubModelResolveException.class)
-    public <T> T handleException(SubModelResolveException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("Invalid field specified when updating " + ex.getEntity(), false);
+    public Object handleException(SubModelResolveException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Invalid field specified when updating " + ex.getEntity());
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public <T> T handleException(MethodArgumentTypeMismatchException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(String.format("Unable to convert the parameter '%s' to the required type '%s' " +
-                "", ex.getValue(),
-                ex.getParameter().getGenericParameterType().getTypeName()), false);
+    public Object handleException(MethodArgumentTypeMismatchException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(String.format("Unable to convert the parameter '%s' to the required type '%s' " +
+                        "", ex.getValue(),
+                ex.getParameter().getGenericParameterType().getTypeName()));
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     @ExceptionHandler(ExpiredJwtException.class)
-    public <T> T handleException(ExpiredJwtException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse("The authorization token has expired", false);
+    public Object handleException(ExpiredJwtException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("The authorization token has expired");
+        return processResponse(ex, errors);
     }
 
     @ResponseBody
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(NoHandlerFoundException.class)
-    public <T> T handleException(NoHandlerFoundException ex) {
-        getLogger().error(ex.getMessage(), ex);
-        return processResponse(ex.getMessage(), false);
+    public Object handleException(NoHandlerFoundException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("No handler found for route");
+        return processResponse(ex, errors);
     }
+
 
 }

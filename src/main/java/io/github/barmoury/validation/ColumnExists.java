@@ -1,6 +1,4 @@
-package io.github.barmoury.api.persistence;
-
-import org.hibernate.validator.constraintvalidation.HibernateConstraintValidatorContext;
+package io.github.barmoury.validation;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -8,6 +6,7 @@ import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import jakarta.validation.Payload;
+import org.hibernate.validator.constraintvalidation.HibernateConstraintValidatorContext;
 import org.hibernate.validator.internal.engine.constraintvalidation.ConstraintValidatorContextImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 

@@ -4,43 +4,42 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
 @Getter
-public class BarmouryUserDetails<T> implements UserDetails {
+public class UserDetails<T> implements org.springframework.security.core.userdetails.UserDetails {
 
     T data;
     String id;
     @Setter String authorityPrefix = "ROLE_";
     List<String> authoritiesValues = new ArrayList<>();
 
-    public BarmouryUserDetails(String id, List<String> authoritiesValues, T data) {
+    public UserDetails(String id, List<String> authoritiesValues, T data) {
         this.id = id;
         this.data = data;
         this.authoritiesValues = authoritiesValues;
     }
 
-    public BarmouryUserDetails(String id, String authoritiesValue, T data) {
+    public UserDetails(String id, String authoritiesValue, T data) {
         this.id = id;
         this.data = data;
         this.authoritiesValues.add(authoritiesValue);
     }
 
-    public BarmouryUserDetails(String id, List<String> authoritiesValues) {
+    public UserDetails(String id, List<String> authoritiesValues) {
         this.id = id;
         this.authoritiesValues = authoritiesValues;
     }
 
-    public BarmouryUserDetails(String id, T data) {
+    public UserDetails(String id, T data) {
         this.id = id;
         this.data = data;
     }
 
-    public BarmouryUserDetails(String id) {
+    public UserDetails(String id) {
         this(id, new ArrayList<>(), null);
     }
 

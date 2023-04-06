@@ -1,7 +1,7 @@
 package io.github.barmoury.api.config;
 
-import io.github.barmoury.api.model.BarmouryUserDetails;
-import io.github.barmoury.crypto.BarmouryEncryptor;
+import io.github.barmoury.api.model.UserDetails;
+import io.github.barmoury.crypto.Encryptor;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -17,14 +17,16 @@ import java.util.function.Function;
 
 public abstract class JwtTokenUtil {
 
-    static String BARMOURY_DATA = "BARMOURY_DATA";
-    static String BARMOURY_AUTHORITIES = "BARMOURY_AUTHORITIES";
+    static final String BARMOURY_DATA = "BARMOURY_DATA";
+    static final String BARMOURY_AUTHORITIES = "BARMOURY_AUTHORITIES";
 
     public abstract String getSecret();
 
     public abstract Logger getLogger();
 
-    public abstract BarmouryEncryptor<Object> getEncryptor();
+    public Encryptor<Object> getEncryptor() {
+        return null;
+    };
 
     public Claims getAllClaimsFromToken(String token) {
         return Jwts.parser().setSigningKey(getSecret()).parseClaimsJws(token).getBody();
@@ -54,15 +56,15 @@ public abstract class JwtTokenUtil {
         return expiration.before(new Date());
     }
 
-    public boolean validate(String token, BarmouryUserDetails<?> barmouryUserDetails) {
+    public boolean validate(String token, UserDetails<?> userDetails) {
         final String id = getIdFromToken(token);
-        return (id.equals(barmouryUserDetails.getId()) && !isTokenExpired(token));
+        return (id.equals(userDetails.getId()) && !isTokenExpired(token));
     }
 
     @SuppressWarnings("unchecked")
-    public <T> BarmouryUserDetails<?> validate(String token) {
+    public <T> UserDetails<?> validate(String token) {
         Claims claims = getAllClaimsFromToken(token);
-        BarmouryEncryptor<Object> encryptor = getEncryptor();
+        Encryptor<Object> encryptor = getEncryptor();
         T data = (T) ((encryptor != null)
                 ? getEncryptor().decrypt((String)claims.get(BARMOURY_DATA))
                 : claims.get(BARMOURY_DATA));
@@ -72,22 +74,22 @@ public abstract class JwtTokenUtil {
         String subject = ((encryptor != null)
                 ? (String) getEncryptor().decrypt(claims.getSubject())
                 : claims.getSubject());
-        return new BarmouryUserDetails<>(subject, authorities, data);
+        return new UserDetails<>(subject, authorities, data);
     }
 
-    public String generateToken(BarmouryUserDetails<?> barmouryUserDetails, long tokenExpiryInSeconds) {
+    public String generateToken(UserDetails<?> userDetails, long tokenExpiryInSeconds) {
         Map<String, Object> claims = new HashMap<>();
-        BarmouryEncryptor<Object> encryptor = getEncryptor();
+        Encryptor<Object> encryptor = getEncryptor();
         Date expiryDate = new Date(System.currentTimeMillis() + (tokenExpiryInSeconds) * 1000);
         claims.put(BARMOURY_DATA, (encryptor != null
-                ? encryptor.encrypt(barmouryUserDetails.getData())
-                : barmouryUserDetails.getData()));
+                ? encryptor.encrypt(userDetails.getData())
+                : userDetails.getData()));
         claims.put(BARMOURY_AUTHORITIES, (encryptor != null
-                ? encryptor.encrypt(barmouryUserDetails.getAuthoritiesValues())
-                : barmouryUserDetails.getAuthoritiesValues()));
+                ? encryptor.encrypt(userDetails.getAuthoritiesValues())
+                : userDetails.getAuthoritiesValues()));
         String subject = (encryptor != null
-                ? encryptor.encrypt(barmouryUserDetails.getUsername())
-                : barmouryUserDetails.getUsername());
+                ? encryptor.encrypt(userDetails.getUsername())
+                : userDetails.getUsername());
         return doGenerateToken(claims, subject, expiryDate);
     }
 

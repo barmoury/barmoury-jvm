@@ -1,4 +1,4 @@
-package io.github.barmoury.api.persistence;
+package io.github.barmoury.eloquent;
 
 import java.lang.annotation.Annotation;
 
@@ -7,8 +7,7 @@ public class RequestParamFilterOperatorImpl implements RequestParamFilter {
     Operator operator;
     RequestParamFilter requestParamFilter;
 
-    public RequestParamFilterOperatorImpl(RequestParamFilter requestParamFilter,
-                                          Operator operator) {
+    public RequestParamFilterOperatorImpl(RequestParamFilter requestParamFilter, Operator operator) {
         this.operator = operator;
         this.requestParamFilter = requestParamFilter;
     }
@@ -41,6 +40,11 @@ public class RequestParamFilterOperatorImpl implements RequestParamFilter {
     @Override
     public boolean columnIsSnakeCase() {
         return requestParamFilter.columnIsSnakeCase();
+    }
+
+    @Override
+    public String multiFilterSeparator() {
+        return requestParamFilter.multiFilterSeparator();
     }
 
     @Override

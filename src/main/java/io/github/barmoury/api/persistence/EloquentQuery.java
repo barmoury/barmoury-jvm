@@ -3,8 +3,12 @@ package io.github.barmoury.api.persistence;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.barmoury.api.model.BarmouryModel;
+import io.github.barmoury.api.model.Model;
+import io.github.barmoury.eloquent.RequestParamFilter;
+import io.github.barmoury.eloquent.RequestParamFilterOperatorImpl;
+import io.github.barmoury.eloquent.StatQuery;
 import io.github.barmoury.util.FieldUtil;
 import jakarta.persistence.*;
 import lombok.Setter;
@@ -21,11 +25,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.math.BigInteger;
+import java.math.BigDecimal;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.DayOfWeek;
+import java.time.Month;
+import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -35,6 +43,9 @@ public class EloquentQuery {
     @Setter static EntityManager superEntityManager;
     static ObjectMapper mapper = new ObjectMapper();
     @Setter static AutowireCapableBeanFactory autowireCapableBeanFactory;
+
+    static final String INTERVAL_COLUMN_DATE_FORMAT = "yyyy-MM-dd HH:mm";
+    static final String PERCENTAGE_CHANGE_RELAY_KEY = "___percentage_change____";
 
     EloquentQuery() {}
 
@@ -48,12 +59,13 @@ public class EloquentQuery {
 
         if (superEntityManager == null) setSuperEntityManager(entityManager);
 
-        MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, false);
-        String queryString = String.format(" FROM %s entity %s", tableName, buildWhereFilter(requestFields));
+        Map<String, JoinColumn> joinTables = new HashMap<>();
+        MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables, false);
+        String queryString = String.format(" FROM %s entity %s", tableName, buildWhereFilter(requestFields, joinTables));
         Query countQuery = buildQueryObject(entityManager, String.format("SELECT COUNT(*) %s", queryString),
                 clazz, requestFields, false);
         int totalElements = ((Number) countQuery.getSingleResult()).intValue();
-        Query query = buildQueryObject(entityManager, String.format("SELECT * %s %s", queryString,
+        Query query = buildQueryObject(entityManager, String.format("SELECT entity.* %s %s", queryString,
                                             buildPageFilter(pageable)), clazz, requestFields, false);
 
         NativeQueryImpl<Map<String, Object>> nativeQuery = (NativeQueryImpl<Map<String, Object>>) query;
@@ -147,6 +159,7 @@ public class EloquentQuery {
     static void resolveQueryForSingleField(MultiValuedMap<String, Object> requestFields,
                                            RequestParamFilter requestParamFilter,
                                            boolean resolveStatQueryAnnotations,
+                                           Map<String, JoinColumn> joinTables,
                                            HttpServletRequest request,
                                            Set<String> queryParams,
                                            String columnName,
@@ -154,7 +167,9 @@ public class EloquentQuery {
         for (String queryParam : queryParams) {
             String[] values = new String[]{null};
             boolean isPresent = false;
-            boolean objectFilter = (!resolveStatQueryAnnotations && (requestParamFilter.operator() == RequestParamFilter.Operator.OBJECT_EQ
+            boolean isEntity = !resolveStatQueryAnnotations && requestParamFilter.operator() == RequestParamFilter.Operator.ENTITY;
+            boolean objectFilter = (!resolveStatQueryAnnotations
+                    && (requestParamFilter.operator() == RequestParamFilter.Operator.OBJECT_EQ
                     || requestParamFilter.operator() == RequestParamFilter.Operator.OBJECT_NE
                     || requestParamFilter.operator() == RequestParamFilter.Operator.OBJECT_LIKE
                     || requestParamFilter.operator() == RequestParamFilter.Operator.OBJECT_STR_EQ
@@ -169,12 +184,20 @@ public class EloquentQuery {
 
             if (!resolveStatQueryAnnotations) {
                 for (Map.Entry<String, String[]> entry : request.getParameterMap().entrySet()) {
-                    if ((entry.getKey().equals(queryParam) || (objectFilter && entry.getKey().startsWith(queryParam)))
-                            && !entry.getValue()[0].isEmpty()) {
+                    if ((entry.getKey().equals(queryParam) || (objectFilter && entry.getKey().startsWith(queryParam))
+                            || (isEntity && entry.getKey().startsWith(queryParam + ".")))) {
+                        boolean anyValuePresent = false;
+                        List<String> validValues = new ArrayList<>();
+                        for (String value : entry.getValue()) {
+                            if (value.isEmpty()) continue;
+                            validValues.add(value);
+                            if (!anyValuePresent) anyValuePresent = true;
+                        }
+                        validValues.toArray(values);
+                        if (!anyValuePresent) continue;
                         queryParam = (objectFilter && requestParamFilter.columnObjectFieldsIsSnakeCase()
                                 ? toSnakeCase(entry.getKey())
                                 : entry.getKey());
-                        values = entry.getValue();
                         isPresent = true;
                         break;
                     }
@@ -187,10 +210,40 @@ public class EloquentQuery {
             if (requestFields.containsKey(queryParam)) {
                 continue;
             }
+            Entity entity = null;
+            Class<?> fieldClass = null;
+            JoinColumn joinColumn = null;
+            if (isEntity) {
+                fieldClass = field.getType();
+                entity = fieldClass.getAnnotation(Entity.class);
+                if (entity != null) {
+                    columnName = String.format("%s_entity.%s", entity.name(),
+                            queryParam.substring(queryParam.indexOf(".")+1));
+                }
+                Field actualSubField = null;
+                String[] nameParts = queryParam.split("\\.");
+                joinColumn = field.getAnnotation(JoinColumn.class);
+                String actualFieldName = nameParts[nameParts.length-1];
+                actualSubField = FieldUtil.getDeclaredField(fieldClass, isSnakeCase
+                        ? toCamelCase(actualFieldName)
+                        : actualFieldName);
+                if (actualSubField == null) {
+                    actualSubField = FieldUtil.getDeclaredField(fieldClass, actualFieldName);
+                }
+                if (actualSubField != null) {
+                    RequestParamFilter actualRequestParamFilter = actualSubField.getAnnotation(RequestParamFilter.class);
+                    if (actualRequestParamFilter != null) requestParamFilter = actualRequestParamFilter;
+                }
+            }
+
             requestFields.put(queryParam, columnName);
             requestFields.put(queryParam, isPresent);
             requestFields.put(queryParam, requestParamFilter);
             requestFields.put(queryParam, values[0]);
+            if (!resolveStatQueryAnnotations && entity != null) {
+                requestFields.put(queryParam, fieldClass);
+                joinTables.put(entity.name(), joinColumn);
+            }
             if (resolveStatQueryAnnotations) {
                 StatQuery.MedianQuery[] medianQueries = field.getAnnotationsByType(StatQuery.MedianQuery.class);
                 StatQuery.ColumnQuery[] columnQueries = field.getAnnotationsByType(StatQuery.ColumnQuery.class);
@@ -208,6 +261,7 @@ public class EloquentQuery {
 
     // TODO seperate for stat and request query
     static <T> MultiValuedMap<String, Object> resolveQueryFields(Class<T> clazz, HttpServletRequest request,
+                                                                 Map<String, JoinColumn> joinTables,
                                                                  boolean resolveStatQueryAnnotations) {
         MultiValuedMap<String, Object> requestFields = new ArrayListValuedHashMap<>();
         List<Field> fields = FieldUtil.getAllFields(clazz);
@@ -225,38 +279,48 @@ public class EloquentQuery {
 
             Set<String> extraFieldNames = new HashSet<>();
             extraFieldNames.add(fieldName);
-            if (!resolveStatQueryAnnotations) Collections.addAll(extraFieldNames, requestParamFilter.aliases());
-            if (!resolveStatQueryAnnotations && requestParamFilter.acceptSnakeCase()) {
-                for (String extraFieldName : new ArrayList<>(extraFieldNames))
-                    extraFieldNames.add(toSnakeCase(extraFieldName));
-            }
-            if (!resolveStatQueryAnnotations && requestParamFilter.operator() == RequestParamFilter.Operator.BETWEEN) {
-                Set<String> fromExtraFieldNames = new HashSet<>();
-                Set<String> toExtraFieldNames = new HashSet<>();
-                for (String extraFieldName : extraFieldNames) {
-                    fromExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_from" : "From"));
-                    toExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_to" : "To"));
+            if (!resolveStatQueryAnnotations) {
+                Collections.addAll(extraFieldNames, requestParamFilter.aliases());
+                if (requestParamFilter.acceptSnakeCase()) {
+                    for (String extraFieldName : new ArrayList<>(extraFieldNames))
+                        extraFieldNames.add(toSnakeCase(extraFieldName));
                 }
-                RequestParamFilter fromRequestParamFilter2 =
-                        new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.GT_EQ);
-                RequestParamFilter toRequestParamFilter2 =
-                        new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.LT_EQ);
-                resolveQueryForSingleField(requestFields, fromRequestParamFilter2, resolveStatQueryAnnotations,
-                        request, fromExtraFieldNames, columnName, field);
-                resolveQueryForSingleField(requestFields, toRequestParamFilter2, resolveStatQueryAnnotations,
-                        request, toExtraFieldNames, columnName, field);
-                continue;
+                if (requestParamFilter.operator() == RequestParamFilter.Operator.BETWEEN) {
+                    Set<String> fromExtraFieldNames = new HashSet<>();
+                    Set<String> toExtraFieldNames = new HashSet<>();
+                    for (String extraFieldName : extraFieldNames) {
+                        fromExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_from" : "From"));
+                        toExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_to" : "To"));
+                    }
+                    RequestParamFilter fromRequestParamFilter2 =
+                            new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.GT_EQ);
+                    RequestParamFilter toRequestParamFilter2 =
+                            new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.LT_EQ);
+                    resolveQueryForSingleField(requestFields, fromRequestParamFilter2, false,
+                            joinTables, request, fromExtraFieldNames, columnName, field);
+                    resolveQueryForSingleField(requestFields, toRequestParamFilter2, false,
+                            joinTables, request, toExtraFieldNames, columnName, field);
+                    continue;
+                }
             }
             resolveQueryForSingleField(requestFields, requestParamFilter, resolveStatQueryAnnotations,
-                    request, extraFieldNames, columnName, field);
+                    joinTables, request, extraFieldNames, columnName, field);
 
         }
         return requestFields;
     }
 
-    public static String buildWhereFilter(MultiValuedMap<String, Object> requestFields) {
+    public static String buildWhereFilter(MultiValuedMap<String, Object> requestFields,
+                                          Map<String, JoinColumn> joinTables) {
         boolean virginQuery = true;
         StringBuilder whereQuery = new StringBuilder();
+        for (Map.Entry<String, JoinColumn> joinTable : joinTables.entrySet()) {
+            whereQuery.append(" INNER JOIN ")
+                    .append(joinTable.getKey()).append(" ").append(joinTable.getKey()).append("_entity ")
+                    .append(" ON entity.").append(joinTable.getValue().name()).append(" = ")
+                    .append(joinTable.getKey()).append("_entity.")
+                    .append(joinTable.getValue().referencedColumnName()).append(" ");
+        }
         for (String matchingFieldName : requestFields.keySet()) {
             Object[] values = requestFields.get(matchingFieldName).toArray();
             RequestParamFilter requestParamFilter = (RequestParamFilter) values[2];
@@ -264,15 +328,22 @@ public class EloquentQuery {
 
             if (virginQuery) whereQuery.append(" WHERE ");
             else whereQuery.append("AND");
-            whereQuery.append(getRelationQueryPart(columnName, matchingFieldName, requestParamFilter.operator()));
+            whereQuery.append(getRelationQueryPart(columnName,
+                    values.length > 4,
+                    matchingFieldName,
+                    requestParamFilter.operator()));
             virginQuery = false;
         }
         return whereQuery.toString();
     }
 
-    static String getRelationQueryPart(String column, String matchingFieldName, RequestParamFilter.Operator operator) {
-        StringBuilder relationPart = new StringBuilder();
-        relationPart.append(" (entity.").append(column).append(" ");
+    static String getRelationQueryPart(String column,
+                                       boolean isEntityField,
+                                       String matchingFieldName,
+                                       RequestParamFilter.Operator operator) {
+        StringBuilder relationPart = new StringBuilder(" (");
+        if (!isEntityField) relationPart.append("entity.");
+        relationPart.append(column).append(" ");
         String[] matchingFieldNameParts = matchingFieldName.split("\\.");
         String objectField =
                 (matchingFieldNameParts.length > 1 ? matchingFieldNameParts[1] : matchingFieldNameParts[0]);
@@ -330,6 +401,8 @@ public class EloquentQuery {
         } else if (operator == RequestParamFilter.Operator.OBJECT_STR_STARTS_WITH) {
             relationPart.append(String.format(" LIKE CONCAT('%%\"%s\":\"', :%s, '%%\",%%') OR entity.%s LIKE CONCAT('%%\"%s\":\"', :%s, '%%\"}')",
                     objectField, matchingFieldName, column, objectField, matchingFieldName));
+        } else if (operator == RequestParamFilter.Operator.ENTITY) {
+            relationPart.append(String.format(" = :%s ", matchingFieldName));
         }
         relationPart.append(") ");
         return relationPart.toString();
@@ -370,12 +443,14 @@ public class EloquentQuery {
         return pagination.toString();
     }
 
+    // Todo use reflection to get table name and others
     @SuppressWarnings("unchecked")
-    public static <T extends BarmouryModel> T getEntityForUpdateById(Long entityId, T field, String tableName, Long id, Class<T> clazz)
+    public static <T extends Model> T getEntityForUpdateById(Long entityId, T field, String tableName, Long id, Class<T> clazz)
             throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
-        if (id != null && id > 0 && field != null && id != ((BarmouryModel)field).getId()) {
+        if (id != null && id > 0 && field != null && id != ((Model)field).getId()) {
             if (superEntityManager == null) return null;
-            Query query = superEntityManager.createNativeQuery(String.format("SELECT * FROM %s WHERE id = %d LIMIT 1",
+            Query query = superEntityManager.createNativeQuery(
+                    String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
                     tableName, id), clazz);
             return ((T) query.getSingleResult());
         }
@@ -389,21 +464,39 @@ public class EloquentQuery {
     public static <T> JsonNode getResourceStat(EntityManager entityManager,
                                                HttpServletRequest request,
                                                String tableName,
-                                               Class<T> clazz) {
-        return getResourceStat(entityManager, request, tableName, clazz, false);
+                                               Class<T> clazz) throws ParseException {
+        Map<String, JoinColumn> joinTables = new HashMap<>();
+        StatQuery statQuery = FieldUtil.getAnnotation(clazz, StatQuery.class);
+        MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables, false);
+        MultiValuedMap<String, Object> statRequestFields = resolveQueryFields(clazz, request, null, true);
+        String whereFilterString = buildWhereFilter(requestFields, joinTables);
+        return getResourceStat(statRequestFields, requestFields, null, entityManager, request,
+                whereFilterString, statQuery, true, tableName, clazz);
     }
 
-    public static <T> ObjectNode getResourceStat(EntityManager entityManager,
-                                               HttpServletRequest request,
-                                               String tableName,
-                                               Class<T> clazz,
-                                               boolean isPrevious) {
+    public static boolean hasStatQueryCapability(HttpServletRequest request, StatQuery statQuery, String capability) {
+        if (!isSnakeCase) capability = toCamelCase(capability);
+        capability = "stat.query." + capability;
+        return (!statQuery.enableClientQuery()
+                || (!request.getParameterMap().containsKey(capability) ||
+                (request.getParameterMap().containsKey(capability) &&
+                        !request.getParameter(capability).equalsIgnoreCase("false"))));
+    }
 
+    public static <T> ObjectNode getResourceStat(MultiValuedMap<String, Object> statRequestFields,
+                                                 MultiValuedMap<String, Object> requestFields,
+                                                 Map<String, Long> currentPercentageMap,
+                                                 EntityManager entityManager,
+                                                 HttpServletRequest request,
+                                                 String whereFilterString,
+                                                 StatQuery statQuery,
+                                                 boolean isMainStat,
+                                                 String tableName,
+                                                 Class<T> clazz) throws ParseException {
+
+        String newEndDateStr = null;
+        String newStartDateStr = null;
         ObjectNode stat = mapper.createObjectNode();
-        StatQuery statQuery = FieldUtil.getAnnotation(clazz, StatQuery.class);
-        MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, false);
-        MultiValuedMap<String, Object> statRequestFields = resolveQueryFields(clazz, request, true);
-        String whereFilterString = buildWhereFilter(requestFields);
 
         Map<String, StatQuery.MedianQuery[]> medianQueries = new HashMap<>();
         Map<String, StatQuery.ColumnQuery[]> columnQueries = new HashMap<>();
@@ -428,36 +521,387 @@ public class EloquentQuery {
                 percentageChangeQueries.put(columnName, (StatQuery.PercentageChangeQuery[]) values[8]);
         }
 
-        boolean processPrevious = !isPrevious && statQuery != null
-                && statQuery.fetchPrevious() && !statQuery.intervalColumn().isEmpty()
-                && requestFields.containsKey(statQuery.intervalColumn());
+        String to = null;
+        String from = null;
+        long different = 0;
+        Date toDate = null;
+        Date startDate = null;
+        String toKey = null;
+        String fromKey = null;
+        boolean isCamelCase = false;
+        String differentUnit = "days";
+        boolean containsIntervalValues = false;
+        if (statQuery != null) {
+            String intervalColumn = statQuery.intervalColumn();
+            if (hasStatQueryCapability(request, statQuery, "interval_column")) {
+                String qValue = request.getParameter("stat.query.interval_column");
+                if (qValue != null) intervalColumn = qValue;
+            }
+            fromKey = intervalColumn + "_from";
+            if (!requestFields.containsKey(fromKey)) {
+                isCamelCase = true;
+                fromKey = toCamelCase(fromKey);
+            }
+            toKey = isCamelCase ? intervalColumn + "To" : intervalColumn + "_to";
+            containsIntervalValues = requestFields.containsKey(fromKey) && requestFields.containsKey(toKey);
+        }
+        if (containsIntervalValues) {
+            from = (String) (requestFields.get(fromKey).toArray())[3];
+            to = (String) (requestFields.get(toKey).toArray())[3];
+            startDate = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT, Locale.ENGLISH).parse(from);
+            toDate = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT, Locale.ENGLISH).parse(to);
+        }
+        boolean processPrevious = isMainStat && currentPercentageMap == null &&
+                containsIntervalValues && statQuery.fetchPrevious() &&
+                hasStatQueryCapability(request, statQuery, "fetch_previous");
         if (processPrevious) {
-            String from = (String) ((Object[])requestFields.get(statQuery.intervalColumn()+"_from").toArray())[3];
-            String to = "";
-            //long daysDifferent = ChronoUnit.DAYS.between(date1, date2);
+            Date newEndDate;
+            Date newStartDate = newEndDate = startDate;
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(newStartDate);
+            different = ChronoUnit.DAYS.between(toDate.toInstant(), startDate.toInstant());
+            if (different < 0) {
+                calendar.add(Calendar.DATE, (int) different);
+            } else {
+                different = ChronoUnit.HOURS.between(toDate.toInstant(), startDate.toInstant());
+                if (different < 0) {
+                    calendar.add(Calendar.HOUR, (int) different);
+                    differentUnit = "hours";
+                } else {
+                    different = ChronoUnit.MINUTES.between(toDate.toInstant(), startDate.toInstant());
+                    calendar.add(Calendar.MINUTE, (int) different);
+                    differentUnit = "minutes";
+                }
+            }
+            newStartDate = Date.from(calendar.toInstant());
+            newEndDateStr = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(newEndDate); //lol - reuse
+            newStartDateStr = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(newStartDate); //lol - reuse
         }
         long totalCount =
-                resolveColumnQueries(clazz, stat, tableName, statQuery, whereFilterString, entityManager, requestFields,
-                        columnQueries);;
+                resolveColumnQueries(request, clazz, stat, tableName, statQuery, whereFilterString,
+                        entityManager, requestFields, columnQueries);
 
-        if (!medianQueries.isEmpty()) {
+        if (!medianQueries.isEmpty() && hasStatQueryCapability(request, statQuery, "process_medians")) {
             resolveMedianQueries(clazz, stat, tableName, whereFilterString, entityManager, requestFields,
                     medianQueries);
         }
-        if (!averageQueries.isEmpty()) {
+        if (!averageQueries.isEmpty() && hasStatQueryCapability(request, statQuery, "process_averages")) {
             resolveAverageQueries(clazz, stat, tableName, whereFilterString, entityManager, requestFields,
                     averageQueries);
         }
-        if (!occurrenceQueries.isEmpty()) {
+        if (!occurrenceQueries.isEmpty() && hasStatQueryCapability(request, statQuery, "process_occurrences")) {
             resolveOccurrenceQueries(clazz, stat, totalCount, tableName, whereFilterString, entityManager, requestFields,
                     occurrenceQueries);
         }
 
+        Map<String, Long> percentageMap = null;
+        if (!percentageChangeQueries.isEmpty()
+                && hasStatQueryCapability(request, statQuery, "process_percentage_changes")) {
+            percentageMap = resolvePercentageChangeQueries(clazz, tableName, whereFilterString, entityManager,
+                    requestFields, percentageChangeQueries);
+        }
+        if (isMainStat && from != null) {
+            stat.put("from", from);
+            stat.put("to", to);
+        }
+
+        ObjectNode previous = null;
         if (processPrevious) {
-            stat.set("previous", getResourceStat(entityManager, request, tableName, clazz, true));
+            previous = getStatBetweenDate(statRequestFields, requestFields, percentageMap, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey,
+                    newStartDateStr, newEndDateStr,
+                    differentUnit, -different);
+
+        }
+        if (percentageMap != null && currentPercentageMap != null) {
+            stat.set(PERCENTAGE_CHANGE_RELAY_KEY, resolvePercentageChangeQueries(currentPercentageMap, percentageMap));
+        }
+        if (processPrevious) {
+            if (previous.has(PERCENTAGE_CHANGE_RELAY_KEY)) {
+                JsonNode percentageChange = previous.remove(PERCENTAGE_CHANGE_RELAY_KEY);
+                Iterator<String> fieldNames = percentageChange.fieldNames();
+                while (fieldNames.hasNext()) {
+                    String fieldName = fieldNames.next();
+                    stat.put(fieldName, percentageChange.get(fieldName).doubleValue());
+                }
+            }
+            stat.set("previous", previous);
+        }
+        if (isMainStat && startDate != null && statQuery.fetchHourly() &&
+                hasStatQueryCapability(request, statQuery, "fetch_hourly")) {
+            stat.set("hourly", fetchHourly(statRequestFields, requestFields, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey, startDate, toDate));
+        }
+        if (isMainStat && startDate != null && statQuery.fetchMonthly() &&
+                hasStatQueryCapability(request, statQuery, "fetch_monthly")) {
+            stat.set("monthly", fetchMonthly(statRequestFields, requestFields, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey, startDate));
+        }
+        if (isMainStat && startDate != null && statQuery.fetchWeekDays() &&
+                hasStatQueryCapability(request, statQuery, "fetch_week_days")) {
+            stat.set(isSnakeCase ? "week_days" : "weekDays", fetchWeekDays(statRequestFields, requestFields,
+                    entityManager, request, whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey, startDate));
+        }
+        if (isMainStat && startDate != null && statQuery.fetchMonthDays() &&
+                hasStatQueryCapability(request, statQuery, "fetch_month_days")) {
+            stat.set(isSnakeCase ? "month_days" : "monthDays", fetchMonthDays(statRequestFields, requestFields,
+                    entityManager, request, whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey, startDate));
+        }
+        if (isMainStat && startDate != null && statQuery.fetchYearly() &&
+                hasStatQueryCapability(request, statQuery, "fetch_yearly")) {
+            stat.set("yearly", fetchYearly(statRequestFields, requestFields, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey, startDate, toDate));
         }
 
         return stat;
+    }
+
+    static <T> ObjectNode getStatBetweenDate(MultiValuedMap<String, Object> statRequestFields,
+                                             MultiValuedMap<String, Object> requestFields,
+                                             Map<String, Long> currentPercentageMap,
+                                             EntityManager entityManager,
+                                             HttpServletRequest request,
+                                             String whereFilterString,
+                                             StatQuery statQuery,
+                                             String tableName,
+                                             Class<T> clazz,
+
+                                             String fromKey,
+                                             String toKey,
+                                             String newStartStr,
+                                             String newEndStr,
+
+                                             String differentUnit,
+                                             long different) throws ParseException  {
+        Object[] modified = requestFields.remove(toKey).toArray(); modified[3] = newEndStr;
+        requestFields.putAll(toKey, Arrays.asList(modified));
+        modified = requestFields.remove(fromKey).toArray(); modified[3] = newStartStr;
+        requestFields.putAll(fromKey, Arrays.asList(modified));
+        ObjectNode result = getResourceStat(statRequestFields, requestFields, currentPercentageMap, entityManager, request,
+                whereFilterString, statQuery, false, tableName, clazz);
+        result.put("from", newStartStr);
+        result.put("to", newEndStr);
+        result.put(isSnakeCase ? "difference_unit" : "differenceUnit", differentUnit);
+        result.put(isSnakeCase ? "difference_from_present" : "differenceFromPresent", different);
+        return result;
+    }
+
+    static <T> ArrayNode fetchHourly(MultiValuedMap<String, Object> statRequestFields,
+                                     MultiValuedMap<String, Object> requestFields,
+                                     EntityManager entityManager,
+                                     HttpServletRequest request,
+                                     String whereFilterString,
+                                     StatQuery statQuery,
+                                     String tableName,
+                                     Class<T> clazz,
+
+                                     String fromKey,
+                                     String toKey,
+                                     Date startDate,
+                                     Date endDate) throws ParseException {
+        ArrayNode arrayNode = mapper.createArrayNode();
+        long different = ChronoUnit.HOURS.between(startDate.toInstant(), endDate.toInstant());
+
+        while (different > 0) {
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(startDate);
+            calendar.add(Calendar.HOUR, 1);
+            endDate = calendar.getTime();
+            different--;
+            arrayNode.add(getStatBetweenDate(statRequestFields, requestFields, null, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey,
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(startDate),
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(endDate),
+                    "hourly", different+1));
+            startDate = endDate;
+        }
+
+        return arrayNode;
+    }
+
+    static <T> ArrayNode fetchMonthly(MultiValuedMap<String, Object> statRequestFields,
+                                      MultiValuedMap<String, Object> requestFields,
+                                      EntityManager entityManager,
+                                      HttpServletRequest request,
+                                      String whereFilterString,
+                                      StatQuery statQuery,
+                                      String tableName,
+                                      Class<T> clazz,
+
+                                      String fromKey,
+                                      String toKey,
+                                      Date mainStartDate) throws ParseException {
+        ArrayNode arrayNode = mapper.createArrayNode();
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(mainStartDate);
+        int monthIndex = calendar.get(Calendar.MONTH);
+        calendar.set(Calendar.DAY_OF_YEAR, 1);
+
+        for (int index = 0; index < 12; index++) {
+            calendar.set(Calendar.MONTH, index);
+            calendar.set(Calendar.DAY_OF_MONTH, 1);
+            Date startDate = calendar.getTime();
+            calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH));
+            Date endDate = calendar.getTime();
+
+            ObjectNode stat = getStatBetweenDate(statRequestFields, requestFields, null, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey,
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(startDate),
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(endDate),
+                    "monthly", (long)index - monthIndex);
+            stat.put(isSnakeCase ? "month_name" : "monthName", Month.of(index+1)
+                    .getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault()));
+            arrayNode.add(stat);
+        }
+
+        return arrayNode;
+    }
+
+    static <T> ArrayNode fetchWeekDays(MultiValuedMap<String, Object> statRequestFields,
+                                      MultiValuedMap<String, Object> requestFields,
+                                      EntityManager entityManager,
+                                      HttpServletRequest request,
+                                      String whereFilterString,
+                                      StatQuery statQuery,
+                                      String tableName,
+                                      Class<T> clazz,
+
+                                      String fromKey,
+                                      String toKey,
+                                      Date mainStartDate) throws ParseException {
+        ArrayNode arrayNode = mapper.createArrayNode();
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(mainStartDate);
+        int monthIndex = calendar.get(Calendar.DAY_OF_WEEK);
+        calendar.setFirstDayOfWeek(Calendar.SUNDAY);
+        calendar.set(Calendar.DAY_OF_WEEK, calendar.getFirstDayOfWeek());
+
+        for (int index = 0; index < 7; index++) {
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            Date startDate = calendar.getTime();
+            calendar.set(Calendar.HOUR_OF_DAY, 23);
+            calendar.set(Calendar.MINUTE, 59);
+            Date endDate = calendar.getTime();
+
+            ObjectNode stat = getStatBetweenDate(statRequestFields, requestFields, null, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey,
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(startDate),
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(endDate),
+                    isSnakeCase ? "week_day" : "weekDay", (long)index - monthIndex+1);
+            stat.put(isSnakeCase ? "week_day" : "weekDay", DayOfWeek.of(index == 0 ? 7 : index)
+                    .getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault()));
+            arrayNode.add(stat);
+
+            calendar.add(Calendar.DAY_OF_WEEK, 1);
+        }
+
+        return arrayNode;
+    }
+
+    static <T> ArrayNode fetchMonthDays(MultiValuedMap<String, Object> statRequestFields,
+                                       MultiValuedMap<String, Object> requestFields,
+                                       EntityManager entityManager,
+                                       HttpServletRequest request,
+                                       String whereFilterString,
+                                       StatQuery statQuery,
+                                       String tableName,
+                                       Class<T> clazz,
+
+                                       String fromKey,
+                                       String toKey,
+                                       Date mainStartDate) throws ParseException {
+        ArrayNode arrayNode = mapper.createArrayNode();
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(mainStartDate);
+        int monthIndex = calendar.get(Calendar.DAY_OF_MONTH);
+        int maxMonthDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH);
+
+        for (int index = 1; index <= maxMonthDay; index++) {
+            calendar.set(Calendar.DAY_OF_MONTH, index);
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            Date startDate = calendar.getTime();
+            calendar.set(Calendar.HOUR_OF_DAY, 23);
+            calendar.set(Calendar.MINUTE, 59);
+            Date endDate = calendar.getTime();
+
+            ObjectNode stat = getStatBetweenDate(statRequestFields, requestFields, null, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey,
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(startDate),
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(endDate),
+                    isSnakeCase ? "day_of_month" : "dayOfMonth", (long)index - monthIndex);
+            stat.put(isSnakeCase ? "day_of_month" : "dayOfMonth", index);
+            arrayNode.add(stat);
+
+            calendar.add(Calendar.DAY_OF_MONTH, 1);
+        }
+
+        return arrayNode;
+    }
+
+    public static int getDiffYears(Date startDate, Date endDate) {
+        Calendar firstCalender = Calendar.getInstance();
+        Calendar secondCalender = Calendar.getInstance();
+        firstCalender.setTime(startDate);
+        secondCalender.setTime(endDate);
+        int diff = secondCalender.get(Calendar.YEAR) - firstCalender.get(Calendar.YEAR);
+        if (firstCalender.get(Calendar.MONTH) > secondCalender.get(Calendar.MONTH) ||
+                (firstCalender.get(Calendar.MONTH) == secondCalender.get(Calendar.MONTH) &&
+                        firstCalender.get(Calendar.DATE) > secondCalender.get(Calendar.DATE))) {
+            diff--;
+        }
+        return diff;
+    }
+
+    static <T> ArrayNode fetchYearly(MultiValuedMap<String, Object> statRequestFields,
+                                      MultiValuedMap<String, Object> requestFields,
+                                      EntityManager entityManager,
+                                      HttpServletRequest request,
+                                      String whereFilterString,
+                                      StatQuery statQuery,
+                                      String tableName,
+                                      Class<T> clazz,
+
+                                      String fromKey,
+                                      String toKey,
+                                     Date startDate,
+                                     Date endDate) throws ParseException {
+
+        ArrayNode arrayNode = mapper.createArrayNode();
+        long different = getDiffYears(startDate, endDate)+1;
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(startDate);
+
+        for (int index = 0; index < different; index++) {
+            calendar.set(Calendar.MONTH, index);
+            calendar.set(Calendar.DAY_OF_YEAR, 1);
+            startDate = calendar.getTime();
+            calendar.set(Calendar.MONTH, 11);
+            calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH));
+            endDate = calendar.getTime();
+
+            ObjectNode stat = getStatBetweenDate(statRequestFields, requestFields, null, entityManager, request,
+                    whereFilterString, statQuery, tableName, clazz,
+                    fromKey, toKey,
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(startDate),
+                    new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT).format(endDate),
+                    "yearly", different - index - 1L);
+            stat.put("year", calendar.get(Calendar.YEAR));
+            arrayNode.add(stat);
+
+            calendar.add(Calendar.YEAR, 1);
+        }
+
+        return arrayNode;
     }
 
     @SuppressWarnings("unchecked")
@@ -483,7 +927,8 @@ public class EloquentQuery {
     }
 
     @SuppressWarnings("unchecked")
-    static <T> long resolveColumnQueries(Class<T> clazz,
+    static <T> long resolveColumnQueries(HttpServletRequest request,
+                                         Class<T> clazz,
                                          ObjectNode stat,
                                          String tableName,
                                          StatQuery statQuery,
@@ -498,27 +943,29 @@ public class EloquentQuery {
         columnQueryList.add(String.format("(SELECT COUNT(*) FROM %s entity %s) AS %s",
                 tableName, whereFilterString, countName));
 
-        for (Map.Entry<String, StatQuery.ColumnQuery[]> entry : columnQueries.entrySet()) {
-            String columnName = entry.getKey();
+        if (hasStatQueryCapability(request, statQuery, "process_column_queries")) {
+            for (Map.Entry<String, StatQuery.ColumnQuery[]> entry : columnQueries.entrySet()) {
+                String columnName = entry.getKey();
 
-            for (StatQuery.ColumnQuery columnQuery : entry.getValue()) {
-                StringBuilder queryBuilder = new StringBuilder("(SELECT ");
-                boolean hasFunction = !columnQuery.sqlFunction().isEmpty();
-                String name = !columnQuery.name().isEmpty()
-                        ? String.format(columnQuery.name(), columnName)
-                        : columnName;
-                if (hasFunction) queryBuilder.append(columnQuery.sqlFunction()).append("(entity.");
-                queryBuilder.append(columnName);
-                if (hasFunction) queryBuilder.append(')');
-                queryBuilder.append(" FROM ").append(tableName).append(" entity ");
-                if (!columnQuery.whereClause().isEmpty()) {
-                    queryBuilder.append((whereFilterString.trim().isEmpty() ? " WHERE " : whereFilterString + " AND "))
-                            .append(String.format(columnQuery.whereClause(), columnName));
-                } else if (!whereFilterString.trim().isEmpty()) {
-                    queryBuilder.append(whereFilterString);
+                for (StatQuery.ColumnQuery columnQuery : entry.getValue()) {
+                    StringBuilder queryBuilder = new StringBuilder("(SELECT ");
+                    boolean hasFunction = !columnQuery.sqlFunction().isEmpty();
+                    String name = !columnQuery.name().isEmpty()
+                            ? String.format(columnQuery.name(), columnName)
+                            : columnName;
+                    if (hasFunction) queryBuilder.append(columnQuery.sqlFunction()).append("(entity.");
+                    queryBuilder.append(columnName);
+                    if (hasFunction) queryBuilder.append(')');
+                    queryBuilder.append(" FROM ").append(tableName).append(" entity ");
+                    if (!columnQuery.whereClause().isEmpty()) {
+                        queryBuilder.append((whereFilterString.trim().isEmpty() ? " WHERE " : whereFilterString + " AND "))
+                                .append(String.format(columnQuery.whereClause(), columnName));
+                    } else if (!whereFilterString.trim().isEmpty()) {
+                        queryBuilder.append(whereFilterString);
+                    }
+                    queryBuilder.append(")").append(" AS ").append(name);
+                    columnQueryList.add(queryBuilder.toString());
                 }
-                queryBuilder.append(")").append(" AS ").append(name);
-                columnQueryList.add(queryBuilder.toString());
             }
         }
         StringBuilder columnQueryBuilder = new StringBuilder("SELECT ");
@@ -680,6 +1127,54 @@ public class EloquentQuery {
 
     // percentage, say last month is 10 this month = 20
     // ((20 - 10) / 10) * 100
+    @SuppressWarnings("unchecked")
+    static <T> Map<String, Long> resolvePercentageChangeQueries(Class<T> clazz,
+                                             String tableName,
+                                             String whereFilterString,
+                                             EntityManager entityManager,
+                                             MultiValuedMap<String, Object> requestFields,
+                                             Map<String, StatQuery.PercentageChangeQuery[]> percentageChangeQueries) {
+
+        Map<String, Long> percentageMap = new HashMap<>();
+        for (Map.Entry<String, StatQuery.PercentageChangeQuery[]> entry : percentageChangeQueries.entrySet()) {
+            String columnName = entry.getKey();
+            for (StatQuery.PercentageChangeQuery percentageQuery : entry.getValue()) {
+                String name = !percentageQuery.name().isEmpty()
+                        ? String.format(percentageQuery.name(), columnName)
+                        : columnName;
+                StringBuilder queryBuilder = new StringBuilder("SELECT ")
+                        .append(percentageQuery.sqlFunction()).append("(entity.").append(columnName)
+                        .append(") AS count").append(" FROM ").append(tableName).append(" entity ");
+                if (!percentageQuery.whereClause().isEmpty()) {
+                    queryBuilder.append((whereFilterString.trim().isEmpty() ? " WHERE " : whereFilterString + " AND "))
+                            .append(String.format(percentageQuery.whereClause(), columnName));
+                } else if (!whereFilterString.trim().isEmpty()) {
+                    queryBuilder.append(whereFilterString);
+                }
+                Map<String, Object> row = singleQueryResultAsMap(clazz, queryBuilder.toString(), entityManager,
+                        requestFields);
+                Object value = row.get("count");
+                if (row.get("count") instanceof BigDecimal) {
+                    value = ((BigDecimal) value).longValue();
+                }
+                percentageMap.put(name, value == null ? 0 : (Long) value);
+            }
+
+        }
+        return percentageMap;
+    }
+
+    static ObjectNode resolvePercentageChangeQueries(Map<String, Long> current, Map<String, Long> previous) {
+        ObjectNode result = mapper.createObjectNode();
+        for (Map.Entry<String, Long> entry : current.entrySet()) {
+            String columnName = entry.getKey();
+            double percentageChange = entry.getValue() - (double) previous.get(columnName);
+            percentageChange = percentageChange / previous.get(columnName);
+            percentageChange = percentageChange * 100.0;
+            result.put(columnName, percentageChange);
+        }
+        return result;
+    }
 
     static void putStatField(ObjectNode stat, String name, Object value) {
         if (value == null) {

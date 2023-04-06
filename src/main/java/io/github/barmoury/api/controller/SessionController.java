@@ -2,10 +2,10 @@ package io.github.barmoury.api.controller;
 
 import io.github.barmoury.api.ValidationGroups;
 import io.github.barmoury.api.config.JwtTokenUtil;
-import io.github.barmoury.api.model.BarmouryModel;
-import io.github.barmoury.api.model.BarmourySession;
-import io.github.barmoury.api.model.BarmouryUserDetails;
-import io.github.barmoury.api.service.BarmourySessionService;
+import io.github.barmoury.api.model.Model;
+import io.github.barmoury.api.model.Session;
+import io.github.barmoury.api.model.UserDetails;
+import io.github.barmoury.api.service.SessionService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,48 +22,48 @@ import org.springframework.web.bind.annotation.RequestMethod;
 
 import java.util.Optional;
 
-public abstract class BarmourySessionController<T extends BarmourySession<?>> extends BarmouryController<T, BarmouryModel.Request> {
+public abstract class SessionController<T extends Session<?>> extends Controller<T, Model.Request> {
 
     @Autowired
     JwtTokenUtil jwtTokenUtil;
 
     @Autowired
-    BarmourySessionService<T> barmourySessionService;
+    SessionService<T> sessionService;
 
     @Override
     @RequestMapping(method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> store(HttpServletRequest httpServletRequest, Authentication authentication,
                                    @Validated(ValidationGroups.Create.class) @RequestBody
-                                   BarmouryModel.Request request) {
+                                   Model.Request request) {
         throw new UnsupportedOperationException("you cannot manually create a session");
     }
 
     @Override
     @RequestMapping(value = "/{id}", method = RequestMethod.PATCH, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> update(HttpServletRequest httpServletRequest, Authentication authentication,
-                                    @PathVariable long id, @RequestBody BarmouryModel.Request request) {
+                                    @PathVariable long id, @RequestBody Model.Request request) {
         throw new UnsupportedOperationException("a session cannot be updated");
     }
 
     @RequestMapping(value = "/self", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getSelfSessions(Authentication authentication, HttpServletRequest request, Pageable pageable) {
-        BarmouryUserDetails<?> userDetails = (BarmouryUserDetails<?>) authentication.getPrincipal();
-        return processResponse(HttpStatus.OK, barmourySessionService.getActiveSessions(userDetails.getId(), pageable),
+        UserDetails<?> userDetails = (UserDetails<?>) authentication.getPrincipal();
+        return processResponse(HttpStatus.OK, sessionService.getActiveSessions(userDetails.getId(), pageable),
                 String.format("%s list fetched successfully", this.fineName));
     }
 
     @RequestMapping(value = "/self", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> deleteSelfSessions(Authentication authentication, HttpServletRequest request) {
-        BarmouryUserDetails<?> userDetails = (BarmouryUserDetails<?>) authentication.getPrincipal();
-        barmourySessionService.getBarmourySessionRepository().deleteSelfSessions(userDetails.getId());
+        UserDetails<?> userDetails = (UserDetails<?>) authentication.getPrincipal();
+        sessionService.getBarmourySessionRepository().deleteSelfSessions(userDetails.getId());
         return processResponse(HttpStatus.NO_CONTENT, null, null);
     }
 
     @SuppressWarnings("unchecked")
     @RequestMapping(value = "/self/{id}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getSelfSession(Authentication authentication, HttpServletRequest request, @PathVariable long id) {
-        BarmouryUserDetails<?> userDetails = (BarmouryUserDetails<?>) authentication.getPrincipal();
-        Optional<T> barmourySession = barmourySessionService.getSelfSession(id, userDetails.getId());
+        UserDetails<?> userDetails = (UserDetails<?>) authentication.getPrincipal();
+        Optional<T> barmourySession = sessionService.getSelfSession(id, userDetails.getId());
         if (barmourySession.isEmpty()) {
             throw new EntityNotFoundException(String.format("no session found with the specified id '%d'", id));
         }
@@ -74,12 +74,12 @@ public abstract class BarmourySessionController<T extends BarmourySession<?>> ex
     @SuppressWarnings("unchecked")
     @RequestMapping(value = "/self/{id}", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> deleteSelfSession(Authentication authentication, HttpServletRequest request, @PathVariable long id) {
-        BarmouryUserDetails<?> userDetails = (BarmouryUserDetails<?>) authentication.getPrincipal();
-        Optional<T> barmourySession = barmourySessionService.getSelfSession(id, userDetails.getId());
+        UserDetails<?> userDetails = (UserDetails<?>) authentication.getPrincipal();
+        Optional<T> barmourySession = sessionService.getSelfSession(id, userDetails.getId());
         if (barmourySession.isEmpty()) {
             throw new EntityNotFoundException(String.format("no session found with the specified id '%d'", id));
         }
-        barmourySessionService.getBarmourySessionRepository().delete(barmourySession.get());
+        sessionService.getBarmourySessionRepository().delete(barmourySession.get());
         return processResponse(HttpStatus.NO_CONTENT, null, null);
     }
 

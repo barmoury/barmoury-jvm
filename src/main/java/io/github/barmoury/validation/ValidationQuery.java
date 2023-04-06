@@ -1,5 +1,7 @@
-package io.github.barmoury.api.persistence;
+package io.github.barmoury.validation;
 
+import io.github.barmoury.util.Constants;
+import io.github.barmoury.util.FieldUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.validation.Constraint;
@@ -17,17 +19,17 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
-@Constraint(validatedBy = ValidateQuery.Validator.class)
-public @interface ValidateQuery {
+@Constraint(validatedBy = ValidationQuery.Validator.class)
+public @interface ValidationQuery {
 
+    String table();
     String message();
-    String table() default "";
     Class<?>[] groups() default {};
     String[] orClauses() default {};
     String[] andClauses() default {};
     Class<? extends Payload>[] payload() default {};
 
-    class Validator implements ConstraintValidator<ValidateQuery, Object> {
+    class Validator implements ConstraintValidator<ValidationQuery, Object> {
 
         String table;
         Class<?>[] groups;
@@ -38,7 +40,7 @@ public @interface ValidateQuery {
         EntityManager entityManager;
 
         @Override
-        public void initialize(ValidateQuery constraintAnnotation) {
+        public void initialize(ValidationQuery constraintAnnotation) {
             ConstraintValidator.super.initialize(constraintAnnotation);
             this.table = constraintAnnotation.table();
             this.groups = constraintAnnotation.groups();
@@ -76,11 +78,15 @@ public @interface ValidateQuery {
             }
             queryString.append(" )");
             Query countQuery = entityManager.createNativeQuery(queryString.toString());
-            if (queryString.toString().contains("value")) countQuery.setParameter("value", o);
+            if (queryString.toString().contains(Constants.VALUE)) countQuery.setParameter(Constants.VALUE, o);
+            if (o != null && queryString.toString().contains(Constants.UPDATE_ENTITY_ID)) {
+                countQuery.setParameter(Constants.UPDATE_ENTITY_ID,
+                        FieldUtil.getFieldValue(o.getClass(), "updateEntityId"));
+            }
             int countValue = ((Number) countQuery.getSingleResult()).intValue();
             if (countValue == 0 && (constraintValidatorContext instanceof ConstraintValidatorContextImpl)) {
                     ((ConstraintValidatorContextImpl) constraintValidatorContext)
-                            .addMessageParameter("value", String.valueOf(o));
+                            .addMessageParameter(Constants.VALUE, String.valueOf(o));
             }
             return countValue > 0;
         }

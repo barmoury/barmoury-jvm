@@ -1,5 +1,6 @@
-package io.github.barmoury.api.converters;
+package io.github.barmoury.converter;
 
+import io.github.barmoury.converter.ObjectConverter;
 import jakarta.persistence.Converter;
 import lombok.SneakyThrows;
 

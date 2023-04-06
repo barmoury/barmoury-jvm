@@ -1,4 +1,4 @@
-package io.github.barmoury.api.converters;
+package io.github.barmoury.converter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeConverter;

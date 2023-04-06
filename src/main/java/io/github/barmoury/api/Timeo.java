@@ -1,23 +1,23 @@
 package io.github.barmoury.api;
 
-import io.github.barmoury.api.model.BarmouryModel;
+import io.github.barmoury.api.model.Model;
 
 import java.util.Date;
 
 public class Timeo {
 
-    public static void resolve(BarmouryModel barmouryModel) {
-        if (barmouryModel.getId() == 0) { resolveCreated(barmouryModel); }
-        else { resolveUpdated(barmouryModel); }
+    public static void resolve(Model model) {
+        if (model.getId() == 0) { resolveCreated(model); }
+        else { resolveUpdated(model); }
     }
 
-    static void resolveCreated(BarmouryModel barmouryModel) {
-        barmouryModel.setCreatedAt(new Date());
-        resolveUpdated(barmouryModel);
+    static void resolveCreated(Model model) {
+        model.setCreatedAt(new Date());
+        resolveUpdated(model);
     }
 
-    static void resolveUpdated(BarmouryModel barmouryModel) {
-        barmouryModel.setUpdatedAt(new Date());
+    static void resolveUpdated(Model model) {
+        model.setUpdatedAt(new Date());
     }
 
 }

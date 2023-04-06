@@ -25,6 +25,7 @@ public abstract class BactuatorController {
     static String SQL_QUERY_SUCCESSFUL = "query successfully";
     static String SQL_QUERY_ERROR_MESSAGE = "You do not have the '%s' permission to perform this operation";
 
+    // list of query possiblt for staticstics
     public abstract String serviceName();
 
     public abstract long downloadsCount();

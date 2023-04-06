@@ -1,21 +1,19 @@
 package io.github.barmoury.api.service;
 
-import lombok.Getter;
+import io.github.barmoury.trace.Device;
 import nl.basjes.parse.useragent.UserAgent;
 import org.springframework.data.domain.Page;
-import org.springframework.stereotype.Service;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Pageable;
 import io.github.barmoury.testing.ValueGenerator;
 import nl.basjes.parse.useragent.UserAgentAnalyzer;
-import io.github.barmoury.api.model.BarmourySession;
-import org.springframework.beans.factory.annotation.Autowired;
+import io.github.barmoury.api.model.Session;
 import io.github.barmoury.api.repository.BarmourySessionRepository;
 
 import java.util.Date;
 import java.util.Optional;
 
-public abstract class BarmourySessionService<T extends BarmourySession<?>> {
+public abstract class SessionService<T extends Session<?>> {
 
     public abstract T initializeSession();
     public abstract BarmourySessionRepository<T> getBarmourySessionRepository();
@@ -43,21 +41,6 @@ public abstract class BarmourySessionService<T extends BarmourySession<?>> {
                 ValueGenerator.generateRandomString(50) +
                 authToken.substring(0, 50);
         String ipAddress = httpServletRequest.getRemoteAddr();
-        UserAgentAnalyzer uaa = UserAgentAnalyzer.newBuilder().hideMatcherLoadStats().withCache(10000)
-                .build();
-        UserAgent userAgent = uaa.parse(httpServletRequest.getHeader("User-Agent"));
-
-        BarmourySession.Device device = new BarmourySession.Device();
-        device.setBrowserName(userAgent.getValue("AgentName"));
-        device.setDeviceName(userAgent.getValue("DeviceName"));
-        device.setDeviceType(userAgent.getValue("DeviceBrand"));
-        device.setDeviceClass(userAgent.getValue("DeviceClass"));
-        device.setBrowserVersion(userAgent.getValue("AgentVersion"));
-        device.setOsName(userAgent.getValue("OperatingSystemName"));
-        device.setEngineName(userAgent.getValue("LayoutEngineName"));
-        device.setOsVersion(userAgent.getValue("OperatingSystemVersion"));
-        device.setEngineVersion(userAgent.getValue("LayoutEngineVersion"));
-
         T barmourySession = this.initializeSession();
         barmourySession.setActorId(actorId);
         barmourySession.setActorType(actorType);
@@ -66,7 +49,7 @@ public abstract class BarmourySessionService<T extends BarmourySession<?>> {
         barmourySession.setLastAuthToken(authToken);
         barmourySession.setSessionToken(sessionToken);
         barmourySession.setExpirationDate(expiryDate);
-        barmourySession.setDevice(device);
+        barmourySession.setDevice(Device.build(httpServletRequest.getHeader("User-Agent")));
         return getBarmourySessionRepository().saveAndFlush(barmourySession);
     }
 

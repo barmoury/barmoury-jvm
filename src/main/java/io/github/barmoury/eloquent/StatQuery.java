@@ -1,4 +1,4 @@
-package io.github.barmoury.api.persistence;
+package io.github.barmoury.eloquent;
 
 import lombok.With;
 
@@ -8,12 +8,15 @@ import java.lang.annotation.*;
 @Target(ElementType.TYPE)
 public @interface StatQuery {
 
+    boolean fetchHourly() default false;
     boolean fetchYearly() default false;
     boolean fetchMonthly() default false;
+    boolean fetchWeekDays() default false;
     boolean fetchPrevious() default false;
-    boolean enableClientQuery() default false; // allow update columns from request params
+    boolean fetchMonthDays() default false;
+    boolean enableClientQuery() default false;
     boolean columnsAreSnakeCase() default true;
-    String intervalColumn() default "created_at";
+    String intervalColumn() default "updated_at";
 
     @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.FIELD)
     @Repeatable(ColumnQuery.QueryContainer.class)
@@ -83,8 +86,9 @@ public @interface StatQuery {
     @Repeatable(PercentageChangeQuery.QueryContainer.class)
     @interface PercentageChangeQuery {
 
-        String name() default "%s_percentage_change";
         String whereClause() default "";
+        String sqlFunction() default "COUNT";
+        String name() default "%s_percentage_change";
 
         @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.FIELD)
         @interface QueryContainer {

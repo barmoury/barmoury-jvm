@@ -1,4 +1,4 @@
-package io.github.barmoury.api.persistence;
+package io.github.barmoury.validation;
 
 import org.hibernate.validator.constraintvalidation.HibernateConstraintValidatorContext;
 import org.hibernate.validator.internal.engine.constraintvalidation.ConstraintValidatorContextImpl;

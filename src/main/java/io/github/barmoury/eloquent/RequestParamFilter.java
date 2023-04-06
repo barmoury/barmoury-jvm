@@ -1,24 +1,25 @@
-package io.github.barmoury.api.persistence;
+package io.github.barmoury.eloquent;
 
-import lombok.Getter;
+import java.lang.annotation.*;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-
-@Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
+@Retention(RetentionPolicy.RUNTIME)
+@Repeatable(RequestParamFilter.Container.class)
 public @interface RequestParamFilter {
 
-    // field for resolve sub entity with _id and .id and .* for inner join
     String column() default "";
     String[] aliases() default {};
     boolean alwaysQuery() default false;
     boolean acceptSnakeCase() default true;
     Operator operator() default Operator.EQ;
     boolean columnIsSnakeCase() default true;
+    String multiFilterSeparator() default "-";
     boolean columnObjectFieldsIsSnakeCase() default true;
+
+    @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.FIELD)
+    @interface Container {
+        RequestParamFilter[] value();
+    }
 
     enum Operator {
         EQ,
@@ -29,6 +30,7 @@ public @interface RequestParamFilter {
         LIKE,
         GT_EQ,
         LT_EQ,
+        ENTITY,
         BETWEEN,
         NOT_LIKE,
         CONTAINS,
@@ -40,12 +42,15 @@ public @interface RequestParamFilter {
         NOT_CONTAINS,
         OBJECT_STR_EQ,
         OBJECT_STR_NE,
+        SENSITIVE_LIKE,
         OBJECT_NOT_LIKE,
         OBJECT_CONTAINS,
         OBJECT_ENDS_WITH,
+        SENSITIVE_NOT_LIKE,
         OBJECT_STARTS_WITH,
         OBJECT_NOT_CONTAINS,
         OBJECT_STR_ENDS_WITH,
+        SENSITIVE_OBJECT_LIKE,
         OBJECT_STR_STARTS_WITH
     }
 

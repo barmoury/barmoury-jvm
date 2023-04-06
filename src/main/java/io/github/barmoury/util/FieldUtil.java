@@ -129,4 +129,35 @@ public class FieldUtil {
         return result;
     }
 
+    public static String getVariableName(Object object) throws IllegalAccessException {
+        Class<?> clazz = object.getClass();
+        Field[] fields = clazz.getFields();
+        for (Field field : fields) {
+            if (field.get(clazz) == object) return field.getName();
+        }
+        return "Unknown";
+    }
+
+    public static Object getFieldValue(Class<?> clazz, String name) {
+        try {
+            Field field = clazz.getDeclaredField(name);
+            return field.get(clazz);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            return null;
+        }
+    }
+
+    public static Object getFieldValue(Object clazz, String name) {
+        try {
+            Field field = clazz.getClass().getDeclaredField(name);
+            boolean fieldIsAccessible = field.canAccess(clazz);
+            if (!fieldIsAccessible) field.setAccessible(true);
+            Object value = field.get(clazz);
+            if (!fieldIsAccessible) field.setAccessible(false);
+            return value;
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            return null;
+        }
+    }
+
 }
