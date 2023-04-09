@@ -475,6 +475,7 @@ public class EloquentQuery {
     }
 
     public static boolean hasStatQueryCapability(HttpServletRequest request, StatQuery statQuery, String capability) {
+        if (statQuery == null) return false;
         if (!isSnakeCase) capability = toCamelCase(capability);
         capability = "stat.query." + capability;
         return (!statQuery.enableClientQuery()

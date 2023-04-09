@@ -54,10 +54,10 @@ public @interface ColumnExists {
                         .getConstraintValidatorPayload(Long.class);
                 if (rowId != null) return true;
             }
-            String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :value", table, column);
+            String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self", table, column);
             queryString = String.format("%s %s ", queryString, this.where);
             Query countQuery = entityManager.createNativeQuery(queryString);
-            countQuery.setParameter("value", o);
+            countQuery.setParameter("self", o);
             int countValue = ((Number) countQuery.getSingleResult()).intValue();
             if (countValue == 0) {
                 if (constraintValidatorContext instanceof ConstraintValidatorContextImpl) {

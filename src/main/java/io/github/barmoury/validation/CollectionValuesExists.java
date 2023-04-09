@@ -56,10 +56,10 @@ public @interface CollectionValuesExists {
             }
             List<?> values = (List<?>) o;
             for (Object value : values) {
-                String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :value", table, column);
+                String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self", table, column);
                 queryString = String.format("%s %s ", queryString, this.where);
                 Query countQuery = entityManager.createNativeQuery(queryString);
-                countQuery.setParameter(Constants.VALUE, value);
+                countQuery.setParameter(Constants.SELF, value);
                 if (((Number) countQuery.getSingleResult()).intValue() == 0) {
                     ((ConstraintValidatorContextImpl) constraintValidatorContext)
                             .addMessageParameter(Constants.VALUE, String.valueOf(value));

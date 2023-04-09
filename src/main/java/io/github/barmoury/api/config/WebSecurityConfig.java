@@ -95,15 +95,6 @@ public class WebSecurityConfig implements WebMvcConfigurer {
     }
 
     @Bean
-    void setupEloquentQuery() {
-        EloquentQuery.setSuperEntityManager(entityManager);
-        EloquentQuery.setAutowireCapableBeanFactory(autowireCapableBeanFactory);
-        String namingStrategy = environment.getProperty("spring.jackson.property-naming-strategy");
-        if (namingStrategy != null) EloquentQuery.setSnakeCase(namingStrategy
-                .equalsIgnoreCase("SNAKE_CASE"));
-    }
-
-    @Bean
     QueryArmoury mySqlEloquentInterface() {
         QueryArmoury  queryArmoury = new QueryArmoury(new MySqlInterface());
         queryArmoury.setEntityManager(entityManager);

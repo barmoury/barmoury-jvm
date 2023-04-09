@@ -148,6 +148,7 @@ public class FieldUtil {
     }
 
     public static Object getFieldValue(Object clazz, String name) {
+        if (clazz == null || name == null) return null;
         try {
             Field field = clazz.getClass().getDeclaredField(name);
             boolean fieldIsAccessible = field.canAccess(clazz);
@@ -158,6 +159,36 @@ public class FieldUtil {
         } catch (NoSuchFieldException | IllegalAccessException e) {
             return null;
         }
+    }
+
+    public static String getTableName(Class<?> clazz) {
+        Entity entity = clazz.getAnnotation(Entity.class);
+        if (entity != null) return entity.name();
+        return null;
+    }
+
+    public static String toCamelCase(String phrase) {
+        while(phrase.contains("_")) {
+            phrase = phrase.replaceFirst("_[a-zA-Z\\d]", String.valueOf(Character.toUpperCase(phrase.charAt(phrase.indexOf("_") + 1))));
+        }
+        return phrase;
+    }
+
+    public static String toSnakeCase(String str) {
+        StringBuilder result = new StringBuilder();
+        char c = str.charAt(0);
+        result.append(Character.toLowerCase(c));
+        for (int i = 1; i < str.length(); i++) {
+            char ch = str.charAt(i);
+            if (Character.isUpperCase(ch)) {
+                result.append('_');
+                result.append(Character.toLowerCase(ch));
+            }
+            else {
+                result.append(ch);
+            }
+        }
+        return result.toString();
     }
 
 }

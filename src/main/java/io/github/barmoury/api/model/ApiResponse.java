@@ -5,6 +5,7 @@ import lombok.Data;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -64,6 +65,15 @@ public class ApiResponse<T> {
 
     public static <T> ResponseEntity<ApiResponse<T>> buildError(HttpStatus status, List<Object> errors, String message) {
         return new ResponseEntity<>(new ApiResponse<>(errors, message), status);
+    }
+
+    public static <T> ResponseEntity<ApiResponse<T>> buildError(HttpStatus status, String message) {
+        List<Object> errors = new ArrayList<>(); errors.add(message);
+        return new ResponseEntity<>(new ApiResponse<>(errors, message), status);
+    }
+
+    public static <T> ResponseEntity<ApiResponse<T>> buildError(HttpStatus status, List<Object> errors) {
+        return new ResponseEntity<>(new ApiResponse<>(errors, errors.get(0).toString()), status);
     }
 
     public static ResponseEntity<Void> noContent() {

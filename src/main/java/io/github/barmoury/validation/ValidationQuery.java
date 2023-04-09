@@ -1,5 +1,6 @@
 package io.github.barmoury.validation;
 
+import io.github.barmoury.api.model.Model;
 import io.github.barmoury.util.Constants;
 import io.github.barmoury.util.FieldUtil;
 import jakarta.persistence.EntityManager;
@@ -16,6 +17,10 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
@@ -27,6 +32,7 @@ public @interface ValidationQuery {
     Class<?>[] groups() default {};
     String[] orClauses() default {};
     String[] andClauses() default {};
+    boolean checkIsZero() default false;
     Class<? extends Payload>[] payload() default {};
 
     class Validator implements ConstraintValidator<ValidationQuery, Object> {
@@ -35,6 +41,7 @@ public @interface ValidationQuery {
         Class<?>[] groups;
         String[] orClauses;
         String[] andClauses;
+        boolean checkIsZero;
 
         @Autowired
         EntityManager entityManager;
@@ -46,6 +53,7 @@ public @interface ValidationQuery {
             this.groups = constraintAnnotation.groups();
             this.orClauses = constraintAnnotation.orClauses();
             this.andClauses = constraintAnnotation.andClauses();
+            this.checkIsZero = constraintAnnotation.checkIsZero();
         }
 
         @Override
@@ -56,39 +64,55 @@ public @interface ValidationQuery {
                         .getConstraintValidatorPayload(Long.class);
                 if (rowId != null) return true;
             }
+            Map<String, Object> fieldValues = new HashMap<>();
             StringBuilder queryString = new StringBuilder("SELECT count(*) FROM ");
             queryString.append(table);
             if (this.orClauses.length > 0 || this.andClauses.length > 0) {
                 queryString.append(" WHERE (");
             }
             for (int index = 0; index < this.orClauses.length; index++) {
-                String orClause = this.orClauses[index];
-                queryString.append(String.format(orClause, o));
+                String clause = this.orClauses[index];
+                queryString.append(clause);
+                while (clause.contains(":")) {
+                    int endIndex = clause.indexOf("\\s");
+                    if (endIndex == -1) endIndex = clause.length();
+                    String fieldName = clause.substring(clause.indexOf(":")+1, endIndex);
+                    clause = clause.substring(clause.indexOf(":")+1).trim();
+                    fieldValues.putIfAbsent(fieldName, FieldUtil.getFieldValue(o, fieldName));
+                }
                 if (index < this.orClauses.length-1) {
                     queryString.append(" OR ");
                 }
             }
             if (this.orClauses.length > 0 && this.andClauses.length > 0) queryString.append(") AND (");
             for (int index = 0; index < this.andClauses.length; index++) {
-                String orClause = this.andClauses[index];
-                queryString.append(String.format(orClause, o));
+                String clause = this.andClauses[index].trim();
+                queryString.append(String.format(clause, o));
+                while (clause.contains(":")) {
+                    int endIndex = clause.indexOf("\\s");
+                    if (endIndex == -1) endIndex = clause.length();
+                    String fieldName = clause.substring(clause.indexOf(":")+1, endIndex);
+                    clause = clause.substring(clause.indexOf(":")+1).trim();
+                    fieldValues.putIfAbsent(fieldName, FieldUtil.getFieldValue(o, fieldName));
+                }
                 if (index < this.andClauses.length-1) {
                     queryString.append(" AND ");
                 }
             }
             queryString.append(" )");
-            Query countQuery = entityManager.createNativeQuery(queryString.toString());
-            if (queryString.toString().contains(Constants.VALUE)) countQuery.setParameter(Constants.VALUE, o);
-            if (o != null && queryString.toString().contains(Constants.UPDATE_ENTITY_ID)) {
-                countQuery.setParameter(Constants.UPDATE_ENTITY_ID,
-                        FieldUtil.getFieldValue(o.getClass(), "updateEntityId"));
+            String queryStringValue = queryString.toString();
+            Query countQuery = entityManager.createNativeQuery(queryStringValue);
+            if (queryStringValue.contains(Constants.SELF)) countQuery.setParameter(Constants.VALUE, o);
+            for (Map.Entry<String, Object> fieldValue : fieldValues.entrySet()) {
+                countQuery.setParameter(fieldValue.getKey(), fieldValue.getValue());
             }
             int countValue = ((Number) countQuery.getSingleResult()).intValue();
             if (countValue == 0 && (constraintValidatorContext instanceof ConstraintValidatorContextImpl)) {
                     ((ConstraintValidatorContextImpl) constraintValidatorContext)
                             .addMessageParameter(Constants.VALUE, String.valueOf(o));
             }
-            return countValue > 0;
+            if (this.checkIsZero) return countValue == 0;
+            return countValue != 0;
         }
     }
 

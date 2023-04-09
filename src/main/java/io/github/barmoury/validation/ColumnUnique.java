@@ -54,7 +54,7 @@ public @interface ColumnUnique {
             // TODO, auto fetch column
             if (this.nullable && o == null) return true;
             Long rowId = null;
-            String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :value", table, column);
+            String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self", table, column);
             if (constraintValidatorContext instanceof HibernateConstraintValidatorContext) {
                 rowId = constraintValidatorContext
                         .unwrap(HibernateConstraintValidatorContext.class)
@@ -63,7 +63,7 @@ public @interface ColumnUnique {
             }
             queryString = String.format("%s %s ", queryString, this.where);
             Query countQuery = entityManager.createNativeQuery(queryString);
-            countQuery.setParameter("value", o);
+            countQuery.setParameter("self", o);
             if (rowId != null) { countQuery.setParameter("id", rowId); }
             int countValue = ((Number) countQuery.getSingleResult()).intValue();
             if (countValue > 0) {

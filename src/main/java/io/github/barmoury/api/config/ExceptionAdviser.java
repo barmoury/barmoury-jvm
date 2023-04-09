@@ -2,10 +2,12 @@ package io.github.barmoury.api.config;
 
 import io.github.barmoury.api.exception.InvalidBactuatorQueryException;
 import io.github.barmoury.api.exception.InvalidLoginException;
+import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
 import io.github.barmoury.api.exception.SubModelResolveException;
 import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ValidationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.http.HttpStatus;
@@ -272,6 +274,24 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(NoHandlerFoundException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("No handler found for route");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    @ExceptionHandler(RouteMethodNotSupportedException.class)
+    public Object handleException(RouteMethodNotSupportedException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ValidationException.class)
+    public Object handleException(ValidationException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("An error occur while trying to validate the payload body");
         return processResponse(ex, errors);
     }
 
