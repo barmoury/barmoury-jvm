@@ -1,4 +1,6 @@
-package io.github.barmoury.eloquent;
+package io.github.barmoury.eloquent.impl;
+
+import io.github.barmoury.eloquent.RequestParamFilter;
 
 import java.lang.annotation.Annotation;
 
@@ -20,6 +22,11 @@ public class RequestParamFilterOperatorImpl implements RequestParamFilter {
     @Override
     public String[] aliases() {
         return requestParamFilter.aliases();
+    }
+
+    @Override
+    public boolean booleanToInt() {
+        return requestParamFilter.booleanToInt();
     }
 
     @Override

@@ -1,11 +1,11 @@
 package io.github.barmoury.eloquent;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.barmoury.api.model.Model;
+import io.github.barmoury.eloquent.impl.RequestParamFilterOperatorImpl;
 import io.github.barmoury.util.FieldUtil;
 import jakarta.persistence.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,7 +21,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
@@ -81,13 +80,13 @@ public class QueryArmoury {
                 clazz, requestFields, false);
         int totalElements = ((Number) countQuery.getSingleResult()).intValue();
         Query query = buildQueryObject(entityManager, String.format("SELECT entity.* %s %s", queryString,
-                buildPageFilter(pageable)), clazz, requestFields, false);
+                buildPageFilter(pageable)), clazz, requestFields, true);
 
-        NativeQueryImpl<Map<String, Object>> nativeQuery = (NativeQueryImpl<Map<String, Object>>) query;
-        nativeQuery.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
-        List<T> content = resolveEntityList(query.getResultList(), clazz, true);
+        //NativeQueryImpl<T> nativeQuery = (NativeQueryImpl<T>) query;
+        //nativeQuery.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        //List<T> content = resolveEntityList(query.getResultList(), clazz, true);
 
-        return new PageImpl<>(content, pageable, totalElements);
+        return new PageImpl<>(query.getResultList(), pageable, totalElements);
     }
 
     public <T> JsonNode statWithQuery(HttpServletRequest request, Class<T> clazz) throws ParseException {
@@ -106,45 +105,56 @@ public class QueryArmoury {
         MultiValuedMap<String, Object> requestFields = new ArrayListValuedHashMap<>();
         List<Field> fields = FieldUtil.getAllFields(clazz);
         for (Field field : fields) {
-            String fieldName = field.getName();
-
-            RequestParamFilter requestParamFilter = field.getAnnotation(RequestParamFilter.class);
-
-            if (!resolveStatQueryAnnotations && requestParamFilter == null) continue;
+            String mainFieldName = field.getName();
             String columnName = FieldUtil.getFieldColumnName(field);
-            if (requestParamFilter != null) {
+
+            RequestParamFilter[] requestParamFilters = field.getAnnotationsByType(RequestParamFilter.class);
+            int requestParamFiltersCount = requestParamFilters.length;
+            for (RequestParamFilter requestParamFilter : requestParamFilters) {
                 if (!requestParamFilter.column().isEmpty()) columnName = requestParamFilter.column();
                 if (requestParamFilter.columnIsSnakeCase()) columnName = FieldUtil.toSnakeCase(columnName);
-            }
 
-            Set<String> extraFieldNames = new HashSet<>();
-            extraFieldNames.add(fieldName);
-            if (!resolveStatQueryAnnotations) {
-                Collections.addAll(extraFieldNames, requestParamFilter.aliases());
-                if (requestParamFilter.acceptSnakeCase()) {
-                    for (String extraFieldName : new ArrayList<>(extraFieldNames))
-                        extraFieldNames.add(FieldUtil.toSnakeCase(extraFieldName));
+                String fieldName = mainFieldName;
+                if (requestParamFiltersCount > 1) {
+                    String operator = requestParamFilter.operator().name();
+                    fieldName = String.format("%s_%c%s", fieldName, operator.charAt(0),
+                            operator.substring(1).toLowerCase());
                 }
-                if (requestParamFilter.operator() == RequestParamFilter.Operator.BETWEEN) {
-                    Set<String> fromExtraFieldNames = new HashSet<>();
-                    Set<String> toExtraFieldNames = new HashSet<>();
-                    for (String extraFieldName : extraFieldNames) {
-                        fromExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_from" : "From"));
-                        toExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_to" : "To"));
+                Set<String> extraFieldNames = new HashSet<>();
+                extraFieldNames.add(fieldName);
+                if (!resolveStatQueryAnnotations) {
+                    Collections.addAll(extraFieldNames, requestParamFilter.aliases());
+                    if (requestParamFilter.acceptSnakeCase()) {
+                        for (String extraFieldName : new ArrayList<>(extraFieldNames))
+                            extraFieldNames.add(FieldUtil.toSnakeCase(extraFieldName));
                     }
-                    RequestParamFilter fromRequestParamFilter2 =
-                            new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.GT_EQ);
-                    RequestParamFilter toRequestParamFilter2 =
-                            new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.LT_EQ);
-                    resolveQueryForSingleField(requestFields, fromRequestParamFilter2, false,
-                            joinTables, request, fromExtraFieldNames, columnName, field);
-                    resolveQueryForSingleField(requestFields, toRequestParamFilter2, false,
-                            joinTables, request, toExtraFieldNames, columnName, field);
-                    continue;
+                    if (requestParamFilter.operator() == RequestParamFilter.Operator.BETWEEN) {
+                        Set<String> fromExtraFieldNames = new HashSet<>();
+                        Set<String> toExtraFieldNames = new HashSet<>();
+                        for (String extraFieldName : extraFieldNames) {
+                            fromExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_from" : "From"));
+                            toExtraFieldNames.add(extraFieldName + (extraFieldName.contains("_") ? "_to" : "To"));
+                        }
+                        RequestParamFilter fromRequestParamFilter2 =
+                                new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.GT_EQ);
+                        RequestParamFilter toRequestParamFilter2 =
+                                new RequestParamFilterOperatorImpl(requestParamFilter, RequestParamFilter.Operator.LT_EQ);
+                        resolveQueryForSingleField(requestFields, fromRequestParamFilter2, false,
+                                joinTables, request, fromExtraFieldNames, columnName, field);
+                        resolveQueryForSingleField(requestFields, toRequestParamFilter2, false,
+                                joinTables, request, toExtraFieldNames, columnName, field);
+                        continue;
+                    }
                 }
+                resolveQueryForSingleField(requestFields, requestParamFilter, resolveStatQueryAnnotations,
+                        joinTables, request, extraFieldNames, columnName, field);
             }
-            resolveQueryForSingleField(requestFields, requestParamFilter, resolveStatQueryAnnotations,
-                    joinTables, request, extraFieldNames, columnName, field);
+            // for stat query
+            if (resolveStatQueryAnnotations && requestParamFiltersCount == 0) {
+                Set<String> extraFieldNames = new HashSet<>(); extraFieldNames.add(mainFieldName);
+                resolveQueryForSingleField(requestFields, null, resolveStatQueryAnnotations,
+                        joinTables, request, extraFieldNames, columnName, field);
+            }
 
         }
         return requestFields;
@@ -900,6 +910,10 @@ public class QueryArmoury {
                         List<String> validValues = new ArrayList<>();
                         for (String value : entry.getValue()) {
                             if (value.isEmpty()) continue;
+                            if (requestParamFilter.booleanToInt() &&
+                                    FieldUtil.objectsHasAnyType(field.getType(), boolean.class, Boolean.class)) {
+                                value = value.equals("true") ? "1" : "0";
+                            }
                             validValues.add(value);
                             if (!anyValuePresent) anyValuePresent = true;
                         }
@@ -1102,26 +1116,22 @@ public class QueryArmoury {
         return pagination.toString();
     }
 
-    // if there is anyway to make it typed query rather than manual processing
-    <T> List<Map<String, Object>> resolveEntityList(List<Map<String, Object>> rows,
-                                                                  Class<T> tClass,
-                                                                  boolean resolveSubEntities) {
+    /*<T> List<Map<String, Object>> resolveEntityList(List<T> rows, Class<T> tClass, boolean resolveSubEntities) {
 
-        List<Map<String, Object>> result = new ArrayList<>();
+        List<T> result = new ArrayList<>();
         Map<String, Object[]> joinColumnFields = resolveSubEntities ? FieldUtil.findJoinColumnFields(tClass) : null;
-        for (Map<String, Object> row : rows) {
+        for (T row : rows) {
             result.add(processSingleRow(row, joinColumnFields, tClass, resolveSubEntities));
         }
         return result;
     }
 
     @SuppressWarnings("unchecked")
-    <T> Map<String, Object> processSingleRow(Map<String, Object> row,
-                                                    Map<String, Object[]> joinColumnFields,
-                                                    Class<T> tClass,
-                                                    boolean resolveSubEntities) {
+    <T> T processSingleRow(T row, Map<String, Object[]> joinColumnFields, Class<T> tClass, boolean resolveSubEntities) {
         Map<String, Object> nrow = new HashMap<>();
-        for (String key : row.keySet()) {
+        List<Field> fields = FieldUtil.getAllFields(tClass);
+        for (Field field : fields) {
+            String key = field.getName();
             if (resolveSubEntities && joinColumnFields.containsKey(key)) {
                 Object[] values = joinColumnFields.get(key);
                 Field field = (Field) values[0];
@@ -1181,7 +1191,7 @@ public class QueryArmoury {
         Map<String, Object> entry = singleQueryResultAsMap(null, queryString, entityManager, requestFields);
         Map<String, Object[]> joinColumnFields = FieldUtil.findJoinColumnFields(tClass);
         return processSingleRow(entry, joinColumnFields, tClass, true);
-    }
+    }*/
 
     <T>  Map<String, Object> singleQueryResultAsMap(Class<T> clazz,
                                                     String queryString,

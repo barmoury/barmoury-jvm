@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+// TODO add field to fetch class with their query and stat props and fields, at startup once
 @Transactional
 public abstract class BactuatorController {
     

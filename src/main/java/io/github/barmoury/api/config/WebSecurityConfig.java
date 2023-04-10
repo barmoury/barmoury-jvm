@@ -1,6 +1,5 @@
 package io.github.barmoury.api.config;
 
-import io.github.barmoury.api.persistence.EloquentQuery;
 import io.github.barmoury.eloquent.QueryArmoury;
 import io.github.barmoury.eloquent.sqlinterface.MySqlInterface;
 import jakarta.persistence.EntityManager;
@@ -109,7 +108,7 @@ public class WebSecurityConfig implements WebMvcConfigurer {
         String pattern = "/**";
         String[] headers = new String[]{"*"};
         String[] origins = new String[]{"*"};
-        String[] methods = new String[]{"POST", "PATCH", "PUT"};
+        String[] methods = new String[]{"*"};
 
         public CorsMapping pattern(String pattern) {
             this.pattern = pattern;

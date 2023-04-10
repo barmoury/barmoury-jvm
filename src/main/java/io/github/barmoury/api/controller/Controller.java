@@ -3,7 +3,6 @@ package io.github.barmoury.api.controller;
 import io.github.barmoury.api.ValidationGroups;
 import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
 import io.github.barmoury.api.model.Model;
-import io.github.barmoury.api.persistence.EloquentQuery;
 import io.github.barmoury.audit.Auditor;
 import io.github.barmoury.eloquent.QueryArmoury;
 import io.github.barmoury.util.FieldUtil;
@@ -62,6 +61,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     }
 
     public void preResponse(T1 entity) {}
+    public void preResponse(Map<String, Object> entity) {}
     public void preQuery(HttpServletRequest request) {}
     public void preCreate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postCreate(HttpServletRequest request, Authentication authentication, T1 entity) {}

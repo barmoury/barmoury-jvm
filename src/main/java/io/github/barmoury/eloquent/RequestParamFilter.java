@@ -10,6 +10,7 @@ public @interface RequestParamFilter {
     String column() default "";
     String[] aliases() default {};
     boolean alwaysQuery() default false;
+    boolean booleanToInt() default false;
     boolean acceptSnakeCase() default true;
     Operator operator() default Operator.EQ;
     boolean columnIsSnakeCase() default true;

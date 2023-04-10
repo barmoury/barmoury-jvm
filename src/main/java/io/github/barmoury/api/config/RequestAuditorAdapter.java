@@ -24,6 +24,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAd
 import java.lang.reflect.Type;
 import java.util.*;
 
+// TODO, update the audit to add response if get still exist, add filter for headers to ignore or star values
 @ControllerAdvice
 public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter implements HandlerInterceptor {
 
