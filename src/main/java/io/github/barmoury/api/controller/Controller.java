@@ -3,6 +3,7 @@ package io.github.barmoury.api.controller;
 import io.github.barmoury.api.ValidationGroups;
 import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
 import io.github.barmoury.api.model.Model;
+import io.github.barmoury.api.model.UserDetails;
 import io.github.barmoury.audit.Auditor;
 import io.github.barmoury.eloquent.QueryArmoury;
 import io.github.barmoury.util.FieldUtil;
@@ -130,8 +131,14 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     }
 
     @SuppressWarnings("unchecked")
-    public T1 resolveRequestPayload(T2 request) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        return (T1) entityClass.getDeclaredConstructor().newInstance().resolve(request);
+    public T1 resolveRequestPayload(Authentication authentication, T2 request) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        UserDetails<?> userDetails = null;
+        if (authentication != null && authentication.getPrincipal() != null && authentication.getPrincipal() instanceof UserDetails secondUserDetails) {
+            userDetails = secondUserDetails;
+        }
+        return (T1) entityClass.getDeclaredConstructor()
+                .newInstance()
+                .resolve(request, queryArmoury, userDetails);
     }
 
     @SuppressWarnings("unchecked")
@@ -148,7 +155,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        T1 resource = resolveRequestPayload(request);
+        T1 resource = resolveRequestPayload(authentication, request);
         this.preCreate(httpServletRequest, authentication, resource, request);
         String msg = validateBeforeCommit(resource);
         if (msg != null) throw new IllegalArgumentException(msg);
@@ -175,7 +182,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         }
         List<Object> entities = new ArrayList<>();
         for (T2 entityRequest : entityRequests) {
-            T1 resource = (T1) entityClass.getDeclaredConstructor().newInstance().resolve(entityRequest);
+            T1 resource = resolveRequestPayload(authentication, entityRequest);
             this.preCreate(httpServletRequest, authentication, resource, entityRequest);
             String msg = validateBeforeCommit(resource);
             if (msg != null) {

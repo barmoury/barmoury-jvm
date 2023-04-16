@@ -1,7 +1,9 @@
 package io.github.barmoury.eloquent;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.barmoury.api.model.Model;
@@ -14,6 +16,7 @@ import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.hibernate.query.sql.internal.NativeQueryImpl;
 import org.hibernate.transform.AliasToEntityMapResultTransformer;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -21,8 +24,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.ParameterizedType;
 import java.math.BigDecimal;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -54,9 +59,8 @@ public class QueryArmoury {
     }
 
     @SuppressWarnings("unchecked")
-    public <T extends Model> T getEntityForUpdateById(T field, Long entityId, Long id)
+    public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        Class<T> clazz = (Class<T>) Model.class;
         String tableName = clazz.getAnnotation(Entity.class).name();
         if (id != null && id > 0 && field != null && id != field.getId()) {
             Query query = entityManager.createNativeQuery(
@@ -73,6 +77,7 @@ public class QueryArmoury {
     public <T> Page<T> pageQuery(HttpServletRequest request, Pageable pageable, Class<T> clazz) {
         String tableName = FieldUtil.getTableName(clazz);
         Map<String, JoinColumn> joinTables = new HashMap<>();
+        if (isSnakeCase) mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
         MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables,
                 false);
         String queryString = String.format(" FROM %s entity %s", tableName, buildWhereFilter(requestFields, joinTables));
@@ -80,13 +85,13 @@ public class QueryArmoury {
                 clazz, requestFields, false);
         int totalElements = ((Number) countQuery.getSingleResult()).intValue();
         Query query = buildQueryObject(entityManager, String.format("SELECT entity.* %s %s", queryString,
-                buildPageFilter(pageable)), clazz, requestFields, true);
+                buildPageFilter(pageable)), clazz, requestFields, false);
 
-        //NativeQueryImpl<T> nativeQuery = (NativeQueryImpl<T>) query;
-        //nativeQuery.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
-        //List<T> content = resolveEntityList(query.getResultList(), clazz, true);
+        NativeQueryImpl<T> nativeQuery = (NativeQueryImpl<T>) query;
+        nativeQuery.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        List<T> content = resolveEntityList(query.getResultList(), clazz, true);
 
-        return new PageImpl<>(query.getResultList(), pageable, totalElements);
+        return new PageImpl<>(content, pageable, totalElements);
     }
 
     public <T> JsonNode statWithQuery(HttpServletRequest request, Class<T> clazz) throws ParseException {
@@ -1116,22 +1121,27 @@ public class QueryArmoury {
         return pagination.toString();
     }
 
-    /*<T> List<Map<String, Object>> resolveEntityList(List<T> rows, Class<T> tClass, boolean resolveSubEntities) {
+    public <T> List<T> resolveEntityList(List<Map<String, Object>> rows,
+                                                    Class<T> tClass,
+                                                    boolean resolveSubEntities) {
 
         List<T> result = new ArrayList<>();
         Map<String, Object[]> joinColumnFields = resolveSubEntities ? FieldUtil.findJoinColumnFields(tClass) : null;
-        for (T row : rows) {
-            result.add(processSingleRow(row, joinColumnFields, tClass, resolveSubEntities));
+        for (Map<String, Object> row : rows) {
+            // TODO this is not efficient, should fetch typed directly and not convert with mapper
+            result.add(mapper.convertValue(processSingleRow(row, joinColumnFields, tClass, resolveSubEntities),
+                    tClass));
         }
         return result;
     }
 
     @SuppressWarnings("unchecked")
-    <T> T processSingleRow(T row, Map<String, Object[]> joinColumnFields, Class<T> tClass, boolean resolveSubEntities) {
+    <T> Map<String, Object> processSingleRow(Map<String, Object> row,
+                                             Map<String, Object[]> joinColumnFields,
+                                             Class<T> tClass,
+                                             boolean resolveSubEntities) {
         Map<String, Object> nrow = new HashMap<>();
-        List<Field> fields = FieldUtil.getAllFields(tClass);
-        for (Field field : fields) {
-            String key = field.getName();
+        for (String key : row.keySet()) {
             if (resolveSubEntities && joinColumnFields.containsKey(key)) {
                 Object[] values = joinColumnFields.get(key);
                 Field field = (Field) values[0];
@@ -1171,9 +1181,9 @@ public class QueryArmoury {
     }
 
     Object resolveSubEntity(Field field,
-                                          JoinColumn joinColumn,
-                                          Class<?> tClass,
-                                          Object value) {
+                            JoinColumn joinColumn,
+                            Class<?> tClass,
+                            Object value) {
         if (value == null) return null;
         if (field.getAnnotation(OneToMany.class) != null) {
             return new ArrayList<>();
@@ -1191,7 +1201,7 @@ public class QueryArmoury {
         Map<String, Object> entry = singleQueryResultAsMap(null, queryString, entityManager, requestFields);
         Map<String, Object[]> joinColumnFields = FieldUtil.findJoinColumnFields(tClass);
         return processSingleRow(entry, joinColumnFields, tClass, true);
-    }*/
+    }
 
     <T>  Map<String, Object> singleQueryResultAsMap(Class<T> clazz,
                                                     String queryString,
