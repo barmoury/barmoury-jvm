@@ -37,7 +37,7 @@ public class Copier {
                         else if (FieldUtil.objectsHasAnyType(field.getType(), short.class, Short.class) && ((Short) value > 0))
                         { field.set(target, value); }
                         else if (FieldUtil.objectsHasAnyType(field.getType(), byte.class, Byte.class) && ((Byte) value > 0))
-                        { field.set(target, value); }
+                        { field.set(target, value); } // maybe check type matches
                         else if (FieldUtil.objectsHasAnyType(field.getType(), char.class, Character.class) && ((Character) value > 0))
                         { field.set(target, value); }
                     } else { field.set(target, value); }

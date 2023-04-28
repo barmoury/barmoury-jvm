@@ -11,6 +11,7 @@ import jakarta.validation.ValidationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.UnexpectedRollbackException;
@@ -110,6 +111,15 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(Exception ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Internal server error occur");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    @ExceptionHandler(HttpMessageConversionException.class)
+    public Object handleException(HttpMessageConversionException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Unable to convert the object for response");
         return processResponse(ex, errors);
     }
 

@@ -56,6 +56,7 @@ public @interface ValidationQuery {
             this.checkIsZero = constraintAnnotation.checkIsZero();
         }
 
+        // TODO: accept paremeters instead of just assuming id for queries see -ts
         @Override
         public boolean isValid(Object o, ConstraintValidatorContext constraintValidatorContext) {
             if (constraintValidatorContext instanceof HibernateConstraintValidatorContext && o == null) {

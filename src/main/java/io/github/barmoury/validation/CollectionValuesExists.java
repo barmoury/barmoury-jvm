@@ -25,13 +25,11 @@ public @interface CollectionValuesExists {
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
     String table() default "";
-    String where() default "";
     String column();
 
     class ListValuesExistsValidator implements ConstraintValidator<CollectionValuesExists, Object> {
 
         String table;
-        String where;
         String column;
         Class<?>[] groups;
 
@@ -42,7 +40,6 @@ public @interface CollectionValuesExists {
         public void initialize(CollectionValuesExists constraintAnnotation) {
             ConstraintValidator.super.initialize(constraintAnnotation);
             this.table = constraintAnnotation.table();
-            this.where = constraintAnnotation.where();
             this.column = constraintAnnotation.column();
             this.groups = constraintAnnotation.groups();
         }
@@ -57,7 +54,6 @@ public @interface CollectionValuesExists {
             List<?> values = (List<?>) o;
             for (Object value : values) {
                 String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self", table, column);
-                queryString = String.format("%s %s ", queryString, this.where);
                 Query countQuery = entityManager.createNativeQuery(queryString);
                 countQuery.setParameter(Constants.SELF, value);
                 if (((Number) countQuery.getSingleResult()).intValue() == 0) {

@@ -24,13 +24,11 @@ public @interface ColumnExists {
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
     String table() default "";
-    String where() default "";
     String column();
 
     class Validator implements ConstraintValidator<ColumnExists, Object> {
 
         String table;
-        String where;
         String column;
         Class<?>[] groups;
 
@@ -41,7 +39,6 @@ public @interface ColumnExists {
         public void initialize(ColumnExists constraintAnnotation) {
             ConstraintValidator.super.initialize(constraintAnnotation);
             this.table = constraintAnnotation.table();
-            this.where = constraintAnnotation.where();
             this.column = constraintAnnotation.column();
             this.groups = constraintAnnotation.groups();
         }
@@ -55,7 +52,6 @@ public @interface ColumnExists {
                 if (rowId != null) return true;
             }
             String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self", table, column);
-            queryString = String.format("%s %s ", queryString, this.where);
             Query countQuery = entityManager.createNativeQuery(queryString);
             countQuery.setParameter("self", o);
             int countValue = ((Number) countQuery.getSingleResult()).intValue();

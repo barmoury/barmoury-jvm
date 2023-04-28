@@ -167,6 +167,10 @@ public class FieldUtil {
         return null;
     }
 
+    public static boolean isSubclassOf(Class<?> child, Class<?> parent){
+        return child != parent && parent.isAssignableFrom(child);
+    }
+
     public static String toCamelCase(String phrase) {
         while(phrase.contains("_")) {
             phrase = phrase.replaceFirst("_[a-zA-Z\\d]", String.valueOf(Character.toUpperCase(phrase.charAt(phrase.indexOf("_") + 1))));

@@ -24,7 +24,6 @@ public @interface ColumnUnique {
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
     String table() default "";
-    String where() default "";
     String column();
     boolean nullable() default false;
 
@@ -32,7 +31,6 @@ public @interface ColumnUnique {
 
         boolean nullable;
         String table;
-        String where;
         String column;
         Class<?>[] groups;
 
@@ -43,7 +41,6 @@ public @interface ColumnUnique {
         public void initialize(ColumnUnique constraintAnnotation) {
             ConstraintValidator.super.initialize(constraintAnnotation);
             this.table = constraintAnnotation.table();
-            this.where = constraintAnnotation.where();
             this.column = constraintAnnotation.column();
             this.groups = constraintAnnotation.groups();
             this.nullable = constraintAnnotation.nullable();
@@ -61,7 +58,6 @@ public @interface ColumnUnique {
                         .getConstraintValidatorPayload(Long.class);
                 if (rowId != null) { queryString += " AND id != :id "; }
             }
-            queryString = String.format("%s %s ", queryString, this.where);
             Query countQuery = entityManager.createNativeQuery(queryString);
             countQuery.setParameter("self", o);
             if (rowId != null) { countQuery.setParameter("id", rowId); }

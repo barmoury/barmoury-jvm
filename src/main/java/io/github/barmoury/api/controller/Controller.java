@@ -39,7 +39,6 @@ import java.util.Map;
 // TODO validate list of entity for multiple
 public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
 
-    String tableName;
     String fineName;
     Class<T1> entityClass;
     JpaRepository<T1, Long> repository;
@@ -49,20 +48,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     static final String NO_RESOURCE_FORMAT_STRING = "No %s found with the specified id";
     static final String ACCESS_DENIED = "Access denied. You do not have the required role to access this endpoint";
 
-    public String validateBeforeCommit(T1 r) {
-        if (r == null) return "Invalid entity";
-        return null;
-    }
-
-    public void setup(Class<T1> entityClass, JpaRepository<T1, Long> repository) {
-        this.repository = repository;
-        this.entityClass = entityClass;
-        this.tableName = FieldUtil.getTableName(this.entityClass);
-        this.fineName = this.entityClass.getSimpleName();
-    }
-
     public void preResponse(T1 entity) {}
-    public void preResponse(Map<String, Object> entity) {}
     public void preQuery(HttpServletRequest request) {}
     public void preCreate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postCreate(HttpServletRequest request, Authentication authentication, T1 entity) {}
@@ -70,15 +56,21 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public void postUpdate(HttpServletRequest request, Authentication authentication, T1 entity) {}
     public void preDelete(HttpServletRequest request, Authentication authentication, T1 entity, long id) {}
     public void postDelete(HttpServletRequest request, Authentication authentication, T1 entity) {}
+    public abstract <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message);
+
+    public void setup(Class<T1> entityClass, JpaRepository<T1, Long> repository) {
+        this.repository = repository;
+        this.entityClass = entityClass;
+        this.fineName = this.entityClass.getSimpleName();
+    }
+
+    public String validateBeforeCommit(T1 r) {
+        if (r == null) return "Invalid entity";
+        return null;
+    }
 
     public boolean shouldNotHonourMethod(RouteMethod routeMethod) {
         return routeMethod == null;
-    }
-
-    public abstract <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message);
-
-    public Auditor<T1> getAuditor() {
-        return null;
     }
 
     public String[] getRouteMethodRoles(RouteMethod ignored) {
@@ -92,42 +84,13 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (!(httpServletRequest.getMethod().equals(RequestMethod.POST.name())
                 || httpServletRequest.getMethod().equals(RequestMethod.PUT.name())
                 || httpServletRequest.getMethod().equals(RequestMethod.PATCH.name()))) {
-            return null;
+            return resourceRequest;
         }
         Map<String, Object> pathParameters = (Map<String, Object>) httpServletRequest
                 .getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         if (pathParameters.containsKey("id")) resourceRequest.updateEntityId = Long.
                 parseLong(pathParameters.get("id").toString());
         return resourceRequest;
-    }
-
-    @RequestMapping(value = "/stat", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> stat(HttpServletRequest request) throws ParseException {
-        if (shouldNotHonourMethod(RouteMethod.STAT)) {
-            throw new RouteMethodNotSupportedException("The 'STAT' method is not supported");
-        }
-        String[] roles = getRouteMethodRoles(RouteMethod.STAT);
-        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
-            throw new AccessDeniedException(ACCESS_DENIED);
-        }
-        preQuery(request);
-        return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
-    }
-
-    @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> index(HttpServletRequest request, Pageable pageable) {
-        if (shouldNotHonourMethod(RouteMethod.INDEX)) {
-            throw new RouteMethodNotSupportedException("The 'INDEX' method is not supported");
-        }
-        String[] roles = getRouteMethodRoles(RouteMethod.INDEX);
-        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
-            throw new AccessDeniedException(ACCESS_DENIED);
-        }
-        preQuery(request);
-        Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass);
-        resources.forEach(this::preResponse);
-        return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
-                this.fineName));
     }
 
     @SuppressWarnings("unchecked")
@@ -141,6 +104,35 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                 .resolve(request, queryArmoury, userDetails);
     }
 
+    @RequestMapping(value = "/stat", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> stat(HttpServletRequest request) throws ParseException {
+        if (shouldNotHonourMethod(RouteMethod.STAT)) {
+            throw new RouteMethodNotSupportedException("The GET '**/stat' route is not supported for this resource");
+        }
+        String[] roles = getRouteMethodRoles(RouteMethod.STAT);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
+            throw new AccessDeniedException(ACCESS_DENIED);
+        }
+        preQuery(request);
+        return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
+    }
+
+    @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> index(HttpServletRequest request, Pageable pageable) {
+        if (shouldNotHonourMethod(RouteMethod.INDEX)) {
+            throw new RouteMethodNotSupportedException("The GET '**/' route is not supported for this resource");
+        }
+        String[] roles = getRouteMethodRoles(RouteMethod.INDEX);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
+            throw new AccessDeniedException(ACCESS_DENIED);
+        }
+        preQuery(request);
+        Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass);
+        resources.forEach(this::preResponse);
+        return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
+                this.fineName));
+    }
+
     @SuppressWarnings("unchecked")
     @RequestMapping(method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> store(HttpServletRequest httpServletRequest, Authentication authentication,
@@ -149,7 +141,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
             throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
 
         if (shouldNotHonourMethod(RouteMethod.STORE)) {
-            throw new RouteMethodNotSupportedException("The 'STORE' method is not supported");
+            throw new RouteMethodNotSupportedException("The POST '**/' route is not supported for this resource");
         }
         String[] roles = getRouteMethodRoles(RouteMethod.STORE);
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
@@ -174,7 +166,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
             throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
 
         if (shouldNotHonourMethod(RouteMethod.STORE_MULTIPLE)) {
-            throw new RouteMethodNotSupportedException("The multiple 'STORE' method is not supported");
+            throw new RouteMethodNotSupportedException("The POST '**/multiple' route is not supported for this resource");
         }
         String[] roles = getRouteMethodRoles(RouteMethod.STORE_MULTIPLE);
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
@@ -206,7 +198,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     @RequestMapping(value = "/{id}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> show(HttpServletRequest request, @PathVariable long id) {
         if (shouldNotHonourMethod(RouteMethod.SHOW)) {
-            throw new RouteMethodNotSupportedException("The 'SHOW' method is not supported");
+            throw new RouteMethodNotSupportedException("The GET '**/{id}' route is not supported for this resource");
         }
         String[] roles = getRouteMethodRoles(RouteMethod.SHOW);
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
@@ -224,14 +216,18 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                                     @ModelAttribute("injectUpdateFieldId") @RequestBody T2 request) {
 
         if (shouldNotHonourMethod(RouteMethod.UPDATE)) {
-            throw new RouteMethodNotSupportedException("The 'UPDATE' method is not supported");
+            throw new RouteMethodNotSupportedException("The PATCH '**/{id}' route is not supported for this resource");
         }
         String[] roles = getRouteMethodRoles(RouteMethod.UPDATE);
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
         T1 resource = queryArmoury.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
-        resource.resolve(request);
+        UserDetails<?> userDetails = null;
+        if (authentication != null && authentication.getPrincipal() != null && authentication.getPrincipal() instanceof UserDetails secondUserDetails) {
+            userDetails = secondUserDetails;
+        }
+        resource.resolve(request, queryArmoury, userDetails);
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
                 .constraintValidatorPayload((resource).getId())
@@ -251,12 +247,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> delete(HttpServletRequest request, Authentication authentication, @PathVariable long id) {
+    public ResponseEntity<?> destroy(HttpServletRequest request, Authentication authentication, @PathVariable long id) {
 
-        if (shouldNotHonourMethod(RouteMethod.DELETE)) {
-            throw new RouteMethodNotSupportedException("The 'DELETE' method is not supported");
+        if (shouldNotHonourMethod(RouteMethod.DESTROY)) {
+            throw new RouteMethodNotSupportedException("The DELETE '**/{id}' route is not supported for this resource");
         }
-        String[] roles = getRouteMethodRoles(RouteMethod.DELETE);
+        String[] roles = getRouteMethodRoles(RouteMethod.DESTROY);
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
@@ -274,7 +270,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         INDEX,
         STORE,
         UPDATE,
-        DELETE,
+        DESTROY,
         STORE_MULTIPLE
     }
 

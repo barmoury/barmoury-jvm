@@ -5,6 +5,7 @@ import io.github.barmoury.eloquent.sqlinterface.MySqlInterface;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
@@ -16,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.ArrayList;
@@ -40,6 +42,8 @@ public class WebSecurityConfig implements WebMvcConfigurer {
 
     @Autowired
     AutowireCapableBeanFactory autowireCapableBeanFactory;
+
+    @Value("${barmoury.crypto.pgp.payload.translate:true}") boolean pgpPayloadTranslate;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -75,6 +79,11 @@ public class WebSecurityConfig implements WebMvcConfigurer {
         if (routeValidatorFilter != null) http.addFilterBefore(routeValidatorFilter, UsernamePasswordAuthenticationFilter.class);
         if (jwtRequestFilter != null) http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        if (pgpPayloadTranslate) registry.addInterceptor(new PgpRequestBodyTranslator());
     }
 
     public void registerCorsMappings(CorsMapping corsMapping) {
