@@ -6,8 +6,10 @@ import com.google.gson.Gson;
 import io.github.barmoury.copier.Copier;
 import io.github.barmoury.crypto.pgp.PgpDecryption;
 import io.github.barmoury.crypto.pgp.PgpEncryption;
+import io.github.barmoury.util.FileUtil;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.SneakyThrows;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.bouncycastle.bcpg.CompressionAlgorithmTags;
@@ -40,10 +42,12 @@ public class PgpConfig {
     @Getter static ObjectMapper objectMapper;
     @Getter static PgpEncryption pgpEncryptor;
     @Getter static PgpDecryption pgpDecryptor;
+    @Setter @Getter static Class<?> applicationClass;
     public static final String REQUEST_MODEL_ATTRIBUTE = "barmoury.pgp.model.attr";
     public static final String RMA = REQUEST_MODEL_ATTRIBUTE;
     public static final String REQUEST_ATTRIBUTE_CLASS_KEY = "barmoury.pgp.request.class";
     public static final String REQUEST_ATTRIBUTE_NAMING_STRATEGY_KEY = "barmoury.property.naming.strategy";
+
 
     @Value("${barmoury.crypto.pgp.password:#{null}}") String pgpPassword;
     @Value("${spring.jackson.property-naming-strategy:}") String _namingStrategy;
@@ -69,7 +73,7 @@ public class PgpConfig {
             pgpDecryptor = PgpDecryption.builder()
                     .passCode(pgpPassword.toCharArray())
                     .pgpSecretKeyRingCollection(new PGPSecretKeyRingCollection(
-                            PGPUtil.getDecoderStream(new FileInputStream(pgpPrivateKeyPath)),
+                            PGPUtil.getDecoderStream(FileUtil.fileStream(applicationClass, pgpPrivateKeyPath)),
                             new JcaKeyFingerprintCalculator()))
                     .build();
         }

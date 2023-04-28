@@ -1,5 +1,7 @@
 package io.github.barmoury.crypto.pgp;
 
+import io.github.barmoury.api.config.PgpConfig;
+import io.github.barmoury.util.FileUtil;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import org.bouncycastle.bcpg.ArmoredOutputStream;
@@ -80,7 +82,7 @@ public class PgpEncryption {
     public byte[] encrypt(byte[] clearData) throws PGPException, IOException {
         ByteArrayInputStream inputStream = new ByteArrayInputStream(clearData);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        encrypt(outputStream, inputStream, clearData.length, new FileInputStream(publicKeyLocation));
+        encrypt(outputStream, inputStream, clearData.length, FileUtil.fileStream(PgpConfig.getApplicationClass(), publicKeyLocation));
         return outputStream.toByteArray();
     }
 
