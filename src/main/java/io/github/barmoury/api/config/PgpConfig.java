@@ -39,9 +39,9 @@ public class PgpConfig {
 
     @Getter static Gson gson;
     @Getter static String namingStrategy;
-    @Getter static ObjectMapper objectMapper;
     @Getter static PgpEncryption pgpEncryptor;
     @Getter static PgpDecryption pgpDecryptor;
+    @Setter @Getter static ObjectMapper objectMapper;
     @Setter @Getter static Class<?> applicationClass;
     public static final String REQUEST_MODEL_ATTRIBUTE = "barmoury.pgp.model.attr";
     public static final String RMA = REQUEST_MODEL_ATTRIBUTE;

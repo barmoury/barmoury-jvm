@@ -35,7 +35,7 @@ public class FieldUtil {
 
     public static boolean isPrimitiveNumber(Field field) {
         return FieldUtil.objectsHasAnyType(field.getType(),
-                byte.class, char.class, short.class,
+                byte.class, char.class, boolean.class, short.class,
                 int.class, long.class, float.class, double.class);
     }
 
