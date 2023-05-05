@@ -2,6 +2,7 @@ package io.github.barmoury.api.config;
 
 import io.github.barmoury.api.model.UserDetails;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +54,9 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
             userDetails = getJwtTokenUtil().validate(token);
         } catch (ExpiredJwtException ex) {
             processResponse(httpServletResponse, "The authorization token has expired", HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        } catch (SignatureException ex) {
+            processResponse(httpServletResponse, "Access denied. Suspicious request detected", HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
         if (userDetails == null) {

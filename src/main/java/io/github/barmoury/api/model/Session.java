@@ -4,6 +4,7 @@ import io.github.barmoury.converter.ObjectConverterImpl;
 import io.github.barmoury.eloquent.RequestParamFilter;
 import io.github.barmoury.eloquent.StatQuery;
 import io.github.barmoury.trace.Device;
+import io.github.barmoury.trace.Isp;
 import io.github.barmoury.trace.Location;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -59,12 +60,17 @@ public class Session<T> extends Model {
 
     @Transient T actor;
 
+    @Transient
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
-    @Column(columnDefinition = "TEXT") @Convert(converter = Device.DeviceConverter.class)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Isp.Converter.class)
+    Isp isp;
+
+    @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Device.Converter.class)
     Device device;
 
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
-    @Column(columnDefinition = "TEXT") @Convert(converter = Location.LocationConverter.class)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Location.Converter.class)
     Location location;
 
     @Column(columnDefinition = "TEXT") @Convert(converter = ObjectConverterImpl.class)

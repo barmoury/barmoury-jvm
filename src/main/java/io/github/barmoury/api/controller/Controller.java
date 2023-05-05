@@ -49,7 +49,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     static final String ACCESS_DENIED = "Access denied. You do not have the required role to access this endpoint";
 
     public void preResponse(T1 entity) {}
-    public void preQuery(HttpServletRequest request) {}
+    public void preQuery(HttpServletRequest request, Authentication authentication) {}
     public void preCreate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postCreate(HttpServletRequest request, Authentication authentication, T1 entity) {}
     public void preUpdate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
@@ -105,7 +105,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     }
 
     @RequestMapping(value = "/stat", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> stat(HttpServletRequest request) throws ParseException {
+    public ResponseEntity<?> stat(HttpServletRequest request, Authentication authentication) throws ParseException {
         if (shouldNotHonourMethod(RouteMethod.STAT)) {
             throw new RouteMethodNotSupportedException("The GET '**/stat' route is not supported for this resource");
         }
@@ -113,12 +113,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        preQuery(request);
+        preQuery(request, authentication);
         return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
     @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> index(HttpServletRequest request, Pageable pageable) {
+    public ResponseEntity<?> index(HttpServletRequest request, Authentication authentication, Pageable pageable) {
         if (shouldNotHonourMethod(RouteMethod.INDEX)) {
             throw new RouteMethodNotSupportedException("The GET '**/' route is not supported for this resource");
         }
@@ -126,7 +126,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        preQuery(request);
+        preQuery(request, authentication);
         Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass);
         resources.forEach(this::preResponse);
         return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",

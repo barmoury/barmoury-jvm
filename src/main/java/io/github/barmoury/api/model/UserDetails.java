@@ -23,12 +23,6 @@ public class UserDetails<T> implements org.springframework.security.core.userdet
         this.authoritiesValues = authoritiesValues;
     }
 
-    public UserDetails(String id, String authoritiesValue, T data) {
-        this.id = id;
-        this.data = data;
-        this.authoritiesValues.add(authoritiesValue);
-    }
-
     public UserDetails(String id, List<String> authoritiesValues) {
         this.id = id;
         this.authoritiesValues = authoritiesValues;

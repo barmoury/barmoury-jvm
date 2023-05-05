@@ -66,12 +66,12 @@ public class Audit<T> extends Model {
 
     @Transient T actor;
 
-    @Column(columnDefinition = "TEXT") @Convert(converter = Device.DeviceConverter.class)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Device.Converter.class)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     Device device;
 
-    @Column(columnDefinition = "TEXT") @Convert(converter = Location.LocationConverter.class)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Location.Converter.class)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     Location location;

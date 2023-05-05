@@ -1,12 +1,13 @@
 package io.github.barmoury.api.config;
 
 import io.github.barmoury.api.model.UserDetails;
-import io.github.barmoury.crypto.Encryptor;
+import io.github.barmoury.crypto.IEncryptor;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPublicKey;
@@ -24,12 +25,13 @@ public abstract class JwtTokenUtil {
 
     public abstract Logger getLogger();
 
-    public Encryptor<Object> getEncryptor() {
+    public IEncryptor<Object> getEncryptor() {
         return null;
     };
 
     public Claims getAllClaimsFromToken(String token) {
-        return Jwts.parser().setSigningKey(getSecret()).parseClaimsJws(token).getBody();
+        return Jwts.parser().setSigningKey(getSecret().getBytes(StandardCharsets.UTF_8))
+                .parseClaimsJws(token).getBody();
     }
 
     public String getIdFromToken(String token) {
@@ -64,22 +66,22 @@ public abstract class JwtTokenUtil {
     @SuppressWarnings("unchecked")
     public <T> UserDetails<?> validate(String token) {
         Claims claims = getAllClaimsFromToken(token);
-        Encryptor<Object> encryptor = getEncryptor();
+        IEncryptor<Object> encryptor = getEncryptor();
         T data = (T) ((encryptor != null)
-                ? getEncryptor().decrypt((String)claims.get(BARMOURY_DATA))
+                ? encryptor.decrypt((String)claims.get(BARMOURY_DATA))
                 : claims.get(BARMOURY_DATA));
         List<String> authorities = (List<String>) ((encryptor != null)
-                ? getEncryptor().decrypt((String)claims.get(BARMOURY_AUTHORITIES))
+                ? encryptor.decrypt((String)claims.get(BARMOURY_AUTHORITIES))
                 : claims.get(BARMOURY_AUTHORITIES));
         String subject = ((encryptor != null)
-                ? (String) getEncryptor().decrypt(claims.getSubject())
+                ? (String) encryptor.decrypt(claims.getSubject())
                 : claims.getSubject());
         return new UserDetails<>(subject, authorities, data);
     }
 
     public String generateToken(UserDetails<?> userDetails, long tokenExpiryInSeconds) {
         Map<String, Object> claims = new HashMap<>();
-        Encryptor<Object> encryptor = getEncryptor();
+        IEncryptor<Object> encryptor = getEncryptor();
         Date expiryDate = new Date(System.currentTimeMillis() + (tokenExpiryInSeconds) * 1000);
         claims.put(BARMOURY_DATA, (encryptor != null
                 ? encryptor.encrypt(userDetails.getData())
@@ -96,7 +98,8 @@ public abstract class JwtTokenUtil {
     public String doGenerateToken(Map<String, Object> claims, String subject, Date expiryDate) {
         return Jwts.builder().setClaims(claims).setSubject(subject).setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(expiryDate)
-                .signWith(SignatureAlgorithm.HS512, getSecret()).compact();
+                .signWith(SignatureAlgorithm.HS512, getSecret().getBytes(StandardCharsets.UTF_8))
+                .compact();
     }
 
     public Optional<RSAPublicKey> getParsedPublicKey() {

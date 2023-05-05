@@ -6,6 +6,7 @@ import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
 import io.github.barmoury.api.exception.SubModelResolveException;
 import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.SignatureException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -84,6 +85,15 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(AccessDeniedException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Access denied. You do not have access to this file");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(SignatureException.class)
+    public Object handleException(SignatureException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Access denied. You do not have access to this resource. Suspicious request.");
         return processResponse(ex, errors);
     }
 

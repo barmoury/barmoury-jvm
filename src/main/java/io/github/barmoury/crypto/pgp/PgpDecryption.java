@@ -1,19 +1,25 @@
 package io.github.barmoury.crypto.pgp;
 
+import io.github.barmoury.api.config.PgpConfig;
+import io.github.barmoury.util.FileUtil;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Setter;
 import org.apache.tomcat.util.http.fileupload.IOUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openpgp.*;
 import org.bouncycastle.openpgp.jcajce.JcaPGPObjectFactory;
 import org.bouncycastle.openpgp.operator.PublicKeyDataDecryptorFactory;
+import org.bouncycastle.openpgp.operator.jcajce.JcaKeyFingerprintCalculator;
 import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyDecryptorBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.JcePublicKeyDataDecryptorFactoryBuilder;
 
 import java.io.*;
 import java.nio.charset.Charset;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 
 @Builder
@@ -27,8 +33,10 @@ public class PgpDecryption {
         }
     }
 
-    private char[] passCode;
-    final PGPSecretKeyRingCollection pgpSecretKeyRingCollection;
+    @Setter String passCode;
+    @Setter String[] passCodes;
+    @Setter String[] privateKeyLocations;
+    @Setter PGPSecretKeyRingCollection pgpSecretKeyRingCollection;
 
     static {
         // Add Bouncy castle to JVM
@@ -37,10 +45,27 @@ public class PgpDecryption {
         }
     }
 
-    PGPPrivateKey findSecretKey(long keyID) throws PGPException {
+    // I currently have no idea how to initialize multiple key at once
+    // so I would just loop through until I find matching PGPSecretKey
+    // should not be too CPU task if 1 secret key location is set
+    PGPPrivateKey findSecretKey(long keyID) throws PGPException, IOException {
+        if (pgpSecretKeyRingCollection == null && privateKeyLocations != null) {
+            for (int index = 0; index < privateKeyLocations.length; index++) {
+                PGPSecretKey pgpSecretKey = new PGPSecretKeyRingCollection(
+                        PGPUtil.getDecoderStream(FileUtil.fileStream(PgpConfig.getApplicationClass(),
+                                privateKeyLocations[index])),
+                        new JcaKeyFingerprintCalculator()).getSecretKey(keyID);
+                if (pgpSecretKey != null) {
+                    return pgpSecretKey.extractPrivateKey(new JcePBESecretKeyDecryptorBuilder()
+                            .setProvider(BouncyCastleProvider.PROVIDER_NAME).build(passCodes[index].toCharArray()));
+                }
+            }
+            return null;
+        }
+        if (pgpSecretKeyRingCollection == null) return null;
         PGPSecretKey pgpSecretKey = pgpSecretKeyRingCollection.getSecretKey(keyID);
         return pgpSecretKey == null ? null : pgpSecretKey.extractPrivateKey(new JcePBESecretKeyDecryptorBuilder()
-                .setProvider(BouncyCastleProvider.PROVIDER_NAME).build(passCode));
+                .setProvider(BouncyCastleProvider.PROVIDER_NAME).build(passCode.toCharArray()));
     }
 
     public void decrypt(InputStream encryptedIn, OutputStream clearOut)

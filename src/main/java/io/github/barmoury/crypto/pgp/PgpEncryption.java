@@ -20,10 +20,7 @@ import java.security.Security;
 import java.sql.Date;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Builder
 @AllArgsConstructor
@@ -41,7 +38,7 @@ public class PgpEncryption {
     @Builder.Default int bufferSize = 1 << 16;
     @Builder.Default int compressionAlgorithm = CompressionAlgorithmTags.ZIP;
     @Builder.Default int symmetricKeyAlgorithm = SymmetricKeyAlgorithmTags.AES_128;
-    String publicKeyLocation;
+    String[] publicKeyLocations;
 
     static {
         // Add Bouncy castle to JVM
@@ -50,11 +47,7 @@ public class PgpEncryption {
         }
     }
 
-    public byte[] encrypt(String data) throws PGPException, IOException {
-        return encrypt(data.getBytes(Charset.defaultCharset()));
-    }
-
-    public void encrypt(OutputStream encryptOut, InputStream clearIn, long length, InputStream publicKeyIn)
+    public void encrypt(OutputStream encryptOut, InputStream clearIn, long length, List<InputStream> publicKeyIns)
             throws IOException, PGPException {
         PGPCompressedDataGenerator compressedDataGenerator =
                 new PGPCompressedDataGenerator(compressionAlgorithm);
@@ -66,8 +59,10 @@ public class PgpEncryption {
                         .setProvider(BouncyCastleProvider.PROVIDER_NAME)
         );
         // Adding public key
-        pgpEncryptedDataGenerator.addMethod(new JcePublicKeyKeyEncryptionMethodGenerator(
-                getPublicKey(publicKeyIn)));
+        for (InputStream publicKeyIn : publicKeyIns) {
+            pgpEncryptedDataGenerator.addMethod(new JcePublicKeyKeyEncryptionMethodGenerator(
+                    getPublicKey(publicKeyIn)));
+        }
         if (armor) {
             encryptOut = new ArmoredOutputStream(encryptOut);
         }
@@ -80,10 +75,26 @@ public class PgpEncryption {
     }
 
     public byte[] encrypt(byte[] clearData) throws PGPException, IOException {
+        List<InputStream> publicKeyStreams = new ArrayList<>();
+        for (String publicKeyLocation : publicKeyLocations) {
+            publicKeyStreams.add(FileUtil.fileStream(PgpConfig.getApplicationClass(), publicKeyLocation));
+        }
+        return encrypt(clearData, publicKeyStreams);
+    }
+
+    public byte[] encrypt(byte[] clearData, List<InputStream> publicKeyStreams) throws PGPException, IOException {
         ByteArrayInputStream inputStream = new ByteArrayInputStream(clearData);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        encrypt(outputStream, inputStream, clearData.length, FileUtil.fileStream(PgpConfig.getApplicationClass(), publicKeyLocation));
+        encrypt(outputStream, inputStream, clearData.length, publicKeyStreams);
         return outputStream.toByteArray();
+    }
+
+    public byte[] encrypt(String data) throws PGPException, IOException {
+        return encrypt(data.getBytes(Charset.defaultCharset()));
+    }
+
+    public byte[] encrypt(String data, List<InputStream> publicKeyStreams) throws PGPException, IOException {
+        return encrypt(data.getBytes(Charset.defaultCharset()), publicKeyStreams);
     }
 
     PGPPublicKey getPublicKey(InputStream keyInputStream) throws IOException, PGPException {

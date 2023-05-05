@@ -15,6 +15,7 @@ import org.apache.tomcat.util.codec.binary.Base64;
 import org.bouncycastle.bcpg.CompressionAlgorithmTags;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
 import org.bouncycastle.openpgp.PGPException;
+import org.bouncycastle.openpgp.PGPSecretKeyRing;
 import org.bouncycastle.openpgp.PGPSecretKeyRingCollection;
 import org.bouncycastle.openpgp.PGPUtil;
 import org.bouncycastle.openpgp.operator.jcajce.JcaKeyFingerprintCalculator;
@@ -33,6 +34,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class PgpConfig {
@@ -42,17 +45,17 @@ public class PgpConfig {
     @Getter static PgpEncryption pgpEncryptor;
     @Getter static PgpDecryption pgpDecryptor;
     @Setter @Getter static ObjectMapper objectMapper;
-    @Setter @Getter static Class<?> applicationClass;
+    @Setter @Getter static Class<?> applicationClass = PgpConfig.class;
     public static final String REQUEST_MODEL_ATTRIBUTE = "barmoury.pgp.model.attr";
     public static final String RMA = REQUEST_MODEL_ATTRIBUTE;
     public static final String REQUEST_ATTRIBUTE_CLASS_KEY = "barmoury.pgp.request.class";
     public static final String REQUEST_ATTRIBUTE_NAMING_STRATEGY_KEY = "barmoury.property.naming.strategy";
 
 
-    @Value("${barmoury.crypto.pgp.password:#{null}}") String pgpPassword;
+    @Value("${barmoury.crypto.pgp.password:#{null}}") String[] pgpPasswords;
     @Value("${spring.jackson.property-naming-strategy:}") String _namingStrategy;
-    @Value("${barmoury.crypto.pgp.key.path.public:#{null}}") String pgpPublicKeyPath;
-    @Value("${barmoury.crypto.pgp.key.path.private:#{null}}") String pgpPrivateKeyPath;
+    @Value("${barmoury.crypto.pgp.key.path.public:#{null}}") String[] pgpPublicKeyPaths;
+    @Value("${barmoury.crypto.pgp.key.path.private:#{null}}") String[] pgpPrivateKeyPaths;
 
     @SneakyThrows
     @PostConstruct
@@ -60,22 +63,26 @@ public class PgpConfig {
         gson = new Gson();
         namingStrategy = _namingStrategy;
         objectMapper = new ObjectMapper();
-        if (pgpPublicKeyPath != null) {
+        if (pgpPublicKeyPaths != null && pgpPublicKeyPaths.length > 0) {
             pgpEncryptor = PgpEncryption.builder()
                     .armor(true)
                     .withIntegrityCheck(true)
                     .compressionAlgorithm(CompressionAlgorithmTags.ZIP)
                     .symmetricKeyAlgorithm(SymmetricKeyAlgorithmTags.AES_128)
-                    .publicKeyLocation(pgpPublicKeyPath)
+                    .publicKeyLocations(pgpPublicKeyPaths)
                     .build();
         }
-        if (pgpPassword != null && pgpPrivateKeyPath != null) {
-            pgpDecryptor = PgpDecryption.builder()
-                    .passCode(pgpPassword.toCharArray())
-                    .pgpSecretKeyRingCollection(new PGPSecretKeyRingCollection(
-                            PGPUtil.getDecoderStream(FileUtil.fileStream(applicationClass, pgpPrivateKeyPath)),
-                            new JcaKeyFingerprintCalculator()))
-                    .build();
+        if (pgpPasswords != null && pgpPasswords.length > 0 && pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length > 0) {
+            pgpDecryptor = PgpDecryption.builder().build();
+            if (pgpPrivateKeyPaths.length == 1) {
+                pgpDecryptor.setPassCode(pgpPasswords[0]);
+                pgpDecryptor.setPgpSecretKeyRingCollection(new PGPSecretKeyRingCollection(
+                        PGPUtil.getDecoderStream(FileUtil.fileStream(applicationClass, pgpPrivateKeyPaths[0])),
+                        new JcaKeyFingerprintCalculator()));
+            } else {
+                pgpDecryptor.setPassCodes(pgpPasswords);
+                pgpDecryptor.setPrivateKeyLocations(pgpPrivateKeyPaths);
+            }
         }
 
     }
