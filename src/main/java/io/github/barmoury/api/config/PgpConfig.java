@@ -90,7 +90,7 @@ public class PgpConfig {
             pgpEncryptor = pgpEncryptorBuilder.build();
         }
 
-        if (pgpPasswords != null && pgpPasswords.length > 0 &&   != null && pgpPrivateKeyPaths.length > 0) {
+        if (pgpPasswords != null && pgpPasswords.length > 0 && pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length > 0) {
             pgpDecryptor = PgpDecryption.builder().signed(signEncryptedPayload).build();
             if (pgpManager != null) pgpDecryptor.setPgpManager(pgpManager);
             if (pgpPrivateKeyPaths.length == 1) {
