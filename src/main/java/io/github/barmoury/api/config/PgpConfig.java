@@ -69,9 +69,11 @@ public class PgpConfig {
         objectMapper = new ObjectMapper();
         pgpManager = new PgpManager();
         pgpManager.setHashAlgorithmCode(hashAlgorithm);
-        for (int index = 0; index < pgpPrivateKeyPaths.length; index++) {
-            pgpManager.addSecretKeys(FileUtil.fileStream(pgpPrivateKeyPaths[index]),
-                    pgpPasswords[index].toCharArray());
+        if (pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length > 0) {
+            for (int index = 0;  index < pgpPrivateKeyPaths.length; index++) {
+                pgpManager.addSecretKeys(FileUtil.fileStream(pgpPrivateKeyPaths[index]),
+                        pgpPasswords[index].toCharArray());
+            }
         }
         if (pgpPublicKeyPaths != null && pgpPublicKeyPaths.length > 0) {
             for (String pgpPublicKeyPath : pgpPublicKeyPaths) {
