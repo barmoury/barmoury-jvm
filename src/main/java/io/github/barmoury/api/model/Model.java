@@ -20,11 +20,11 @@ public class Model {
     long id;
 
     @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
-    @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
     Date createdAt = new Date();
 
     @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
-    @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
     Date updatedAt = new Date();
 
     public Model resolve(Request baseRequest) {

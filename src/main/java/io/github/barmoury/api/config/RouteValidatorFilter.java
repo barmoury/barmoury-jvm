@@ -23,7 +23,9 @@ public abstract class RouteValidatorFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String method = request.getMethod();
         String route = request.getRequestURI().replaceAll(request.getContextPath(), "");
-        ValidationExecutor validationExecutor = routeValidationExecutors.get(String.format("%s<=#=>%s", method, route));
+        ValidationExecutor validationExecutor = routeValidationExecutors
+                .getOrDefault(String.format("%s<=#=>%s", method, route),
+                        routeValidationExecutors.get(String.format("ANY<=#=>%s", route)));
         if (validationExecutor != null && !validationExecutor.valid(request)) {
             processResponse(response, "Validation failed for the request");
             return;

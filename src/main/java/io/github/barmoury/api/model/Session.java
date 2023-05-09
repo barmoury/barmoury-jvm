@@ -24,7 +24,7 @@ public class Session<T> extends Model {
     @StatQuery.PercentageChangeQuery
     @StatQuery.AverageQuery @StatQuery.MedianQuery
     @StatQuery.ColumnQuery(name = "%s_sum", sqlFunction = "SUM")
-    @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
     @StatQuery.PercentageChangeQuery(sqlFunction = "SUM", name = "%s_sum_percentage_change")
     long refreshCount;
 
@@ -45,7 +45,7 @@ public class Session<T> extends Model {
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     String lastAuthToken;
 
-    @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
     Date expirationDate;
 
     @StatQuery.OccurrenceQuery
