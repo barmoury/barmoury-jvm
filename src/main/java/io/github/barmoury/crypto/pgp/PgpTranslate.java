@@ -8,6 +8,8 @@ import io.jsonwebtoken.impl.TextCodec;
 import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
+import org.bouncycastle.util.encoders.Base32;
+import org.springframework.beans.factory.annotation.Value;
 
 @Log4j2
 @NoArgsConstructor
@@ -17,9 +19,14 @@ public class PgpTranslate {
     @JsonValue
     @SneakyThrows
     public String toEncryptedString() {
-        return TextCodec.BASE64
-                .encode(new String(getPgpEncryptor()
-                        .encrypt(PgpConfig.objectToString(this))));
+        byte[] encrypted = getPgpEncryptor()
+                .encrypt(PgpConfig.objectToString(this));
+        return switch (PgpConfig.getEncoding()) {
+            case "BASE64" -> TextCodec.BASE64.encode(encrypted);
+            case "BASE64_URL" -> TextCodec.BASE64URL.encode(encrypted);
+            case "BASE32" -> new String(Base32.encode(encrypted), PgpConfig.getCharset());
+            default -> new String(encrypted, PgpConfig.getCharset());
+        };
     }
 
     public PgpEncryption getPgpEncryptor() {

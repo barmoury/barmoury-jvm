@@ -21,8 +21,8 @@ public class PgpRequestBodyTranslator implements HandlerInterceptor {
             if (payload.isBlank()) throw new IllegalArgumentException("the request body is empty, cannot" +
                     " continue with pgp translation");
             ObjectMapper objectMapper = PgpConfig.getObjectMapper();
-            request.setAttribute(PgpConfig.REQUEST_MODEL_ATTRIBUTE, objectMapper.readValue(PgpConfig.getPgpDecryptor()
-                    .decrypt(Base64.decodeBase64(payload)), pgpRequestHandler.value()));
+            request.setAttribute(PgpConfig.REQUEST_MODEL_ATTRIBUTE, objectMapper
+                    .readValue(PgpConfig.decodeEncryptedString(payload), pgpRequestHandler.value()));
         }
         return true;
     }

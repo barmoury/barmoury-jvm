@@ -8,6 +8,7 @@ import io.github.barmoury.crypto.pgp.PgpDecryption;
 import io.github.barmoury.crypto.pgp.PgpEncryption;
 import io.github.barmoury.crypto.pgp.PgpManager;
 import io.github.barmoury.util.FileUtil;
+import io.jsonwebtoken.impl.TextCodec;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,6 +21,7 @@ import org.bouncycastle.openpgp.PGPSecretKeyRing;
 import org.bouncycastle.openpgp.PGPSecretKeyRingCollection;
 import org.bouncycastle.openpgp.PGPUtil;
 import org.bouncycastle.openpgp.operator.jcajce.JcaKeyFingerprintCalculator;
+import org.bouncycastle.util.encoders.Base32;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.json.GsonJsonParser;
 import org.springframework.core.MethodParameter;
@@ -35,12 +37,16 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Type;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 @Component
 public class PgpConfig {
 
+    @Getter static Charset charset;
+    @Getter static String encoding;
     @Getter @Setter static Gson gson;
     @Getter static String namingStrategy;
     @Getter static PgpManager pgpManager;
@@ -55,7 +61,9 @@ public class PgpConfig {
 
 
     @Value("${barmoury.crypto.pgp.passwords:#{null}}") String[] pgpPasswords;
+    @Value("${barmoury.crypto.pgp.encryption.charset:UTF-8}") String _charset;
     @Value("${spring.jackson.property-naming-strategy:}") String _namingStrategy;
+    @Value("${barmoury.crypto.pgp.encryption.encoding:BASE64}") String _encoding;
     @Value("${barmoury.crypto.pgp.encryption.sign:false}") boolean signEncryptedPayload;
     @Value("${barmoury.crypto.pgp.key.path.public:#{null}}") String[] pgpPublicKeyPaths;
     @Value("${barmoury.crypto.pgp.key.path.private:#{null}}") String[] pgpPrivateKeyPaths;
@@ -67,6 +75,8 @@ public class PgpConfig {
         gson = new Gson();
         namingStrategy = _namingStrategy;
         objectMapper = new ObjectMapper();
+        charset = resolveCharset(_charset);
+        validateEncoding(_encoding); encoding = _encoding;
         pgpManager = new PgpManager();
         pgpManager.setHashAlgorithmCode(hashAlgorithm);
         if (pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length > 0) {
@@ -112,13 +122,40 @@ public class PgpConfig {
         return gson.toJson(object);
     }
 
-    public <T> T fromEncryptedString(Class<T> tClass, String pgpEncrypted)
+    public static <T> T fromEncryptedString(Class<T> tClass, String pgpEncrypted)
             throws PGPException, IOException, NoSuchMethodException, InvocationTargetException,
             InstantiationException, IllegalAccessException {
         T body = tClass.getConstructor().newInstance();
         Copier.copy(body, getObjectMapper()
-                .readValue(getPgpDecryptor().decrypt(Base64.decodeBase64(pgpEncrypted)), tClass));
+                .readValue(decodeEncryptedString(pgpEncrypted), tClass));
         return body;
+    }
+
+    public static byte[] decodeEncryptedString(String pgpEncrypted) throws PGPException, IOException {
+        return getPgpDecryptor().decrypt(switch (getEncoding()) {
+            case "BASE64" -> TextCodec.BASE64.decode(pgpEncrypted);
+            case "BASE64_URL" -> TextCodec.BASE64URL.decode(pgpEncrypted);
+            case "BASE32" -> Base32.decode(pgpEncrypted);
+            default -> pgpEncrypted.getBytes(PgpConfig.getCharset());
+        });
+    }
+
+    public void validateEncoding(String encoding) {
+        if (!(encoding.equalsIgnoreCase("NONE")
+                || encoding.equalsIgnoreCase("BASE32")
+                || encoding.equalsIgnoreCase("BASE64")
+                || encoding.equalsIgnoreCase("BASE64_URL"))) {
+            throw new IllegalArgumentException("The barmoury.crypto.pgp.encryption.encoding must be any of" +
+                    " NONE, BASE32, BASE64, BASE64_URL");
+        }
+    }
+
+    public Charset resolveCharset(String charsetName) {
+        if (!Charset.isSupported(charsetName)) {
+            throw new IllegalArgumentException("The barmoury.crypto.pgp.encryption.charset must be any of" +
+                    " " + Charset.availableCharsets());
+        }
+        return Charset.forName(charsetName);
     }
 
 }

@@ -208,6 +208,14 @@ public class PgpManager {
     }
 
     public void setHashAlgorithmCode(String hashAlgorithm) {
+        if (!(hashAlgorithm.equalsIgnoreCase("MD5")
+                || hashAlgorithm.equalsIgnoreCase("SHA256")
+                || hashAlgorithm.equalsIgnoreCase("SHA512")
+                || hashAlgorithm.equalsIgnoreCase("TIGER192")
+                || hashAlgorithm.equalsIgnoreCase("RIPEMD160"))) {
+            throw new IllegalArgumentException("The hash algorithm (barmoury.crypto.pgp.encryption.sign.hash-algorithm)" +
+                    " must be any of MD5, SHA256, SHA512, TIGER192, RIPEMD160");
+        }
         this.hashAlgorithmCode = getHashAlgorithmCode(hashAlgorithm);
     }
 
@@ -216,8 +224,8 @@ public class PgpManager {
             case "MD5" -> PGPUtil.MD5;
             case "SHA256" -> PGPUtil.SHA256;
             case "SHA512" -> PGPUtil.SHA512;
-            case "RIPEMD160" -> PGPUtil.RIPEMD160;
             case "TIGER192" -> PGPUtil.TIGER_192;
+            case "RIPEMD160" -> PGPUtil.RIPEMD160;
             default -> throw new IllegalArgumentException("Unsupported hash algorithm: " + hashAlgorithm);
         };
     }
