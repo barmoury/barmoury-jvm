@@ -32,7 +32,7 @@ public class PgpTranslateHttpMessageConverter extends AbstractHttpMessageConvert
     @Autowired LocalValidatorFactoryBean localValidatorFactoryBean;
 
     public PgpTranslateHttpMessageConverter() {
-        super(new MediaType("text", "plain"));
+        super(new MediaType("*", "*"));
     }
 
     @Override
