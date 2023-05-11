@@ -124,7 +124,8 @@ public class QueryArmoury {
                 if (requestParamFiltersCount > 1) {
                     String operator = requestParamFilter.operator().name();
                     fieldName = String.format("%s%s%c%s", fieldName,
-                            requestParamFilter.multiFilterSeparator(),
+                            requestParamFilter.multiFilterSeparator().equals("__") && isSnakeCase
+                                    ? "_" : requestParamFilter.multiFilterSeparator(),
                             operator.charAt(0),
                             operator.substring(1).toLowerCase());
                 }

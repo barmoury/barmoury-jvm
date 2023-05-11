@@ -14,7 +14,7 @@ public @interface RequestParamFilter {
     boolean acceptSnakeCase() default true;
     Operator operator() default Operator.EQ;
     boolean columnIsSnakeCase() default true;
-    String multiFilterSeparator() default "_";
+    String multiFilterSeparator() default "__";
     boolean columnObjectFieldsIsSnakeCase() default true;
 
     @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.FIELD)

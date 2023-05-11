@@ -131,13 +131,17 @@ public class PgpConfig {
         return body;
     }
 
-    public static byte[] decodeEncryptedString(String pgpEncrypted) throws PGPException, IOException {
-        return getPgpDecryptor().decrypt(switch (getEncoding()) {
-            case "BASE64" -> TextCodec.BASE64.decode(pgpEncrypted);
-            case "BASE64_URL" -> TextCodec.BASE64URL.decode(pgpEncrypted);
+    public static byte[] decodeEncrypted(byte[] pgpEncrypted) throws PGPException, IOException {
+        return getPgpDecryptor().decrypt(switch (encoding) {
+            case "BASE64" -> TextCodec.BASE64.decode(new String(pgpEncrypted, charset));
+            case "BASE64_URL" -> TextCodec.BASE64URL.decode(new String(pgpEncrypted, charset));
             case "BASE32" -> Base32.decode(pgpEncrypted);
-            default -> pgpEncrypted.getBytes(PgpConfig.getCharset());
+            default -> pgpEncrypted;
         });
+    }
+
+    public static byte[] decodeEncryptedString(String pgpEncrypted) throws PGPException, IOException {
+        return decodeEncrypted(pgpEncrypted.getBytes(charset));
     }
 
     public void validateEncoding(String encoding) {

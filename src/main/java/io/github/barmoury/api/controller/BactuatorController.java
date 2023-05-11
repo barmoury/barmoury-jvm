@@ -1,11 +1,17 @@
 package io.github.barmoury.api.controller;
 
 import io.github.barmoury.api.exception.InvalidBactuatorQueryException;
+import io.github.barmoury.api.model.Model;
+import io.github.barmoury.eloquent.RequestParamFilter;
+import io.github.barmoury.eloquent.StatQuery;
+import io.github.barmoury.util.FieldUtil;
+import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,38 +33,33 @@ public abstract class BactuatorController {
     static String SQL_QUERY_SUCCESSFUL = "query successfully";
     static String SQL_QUERY_ERROR_MESSAGE = "You do not have the '%s' permission to perform this operation";
 
-    // list of query possiblt for staticstics
-    public abstract String serviceName();
-
-    public abstract long downloadsCount();
-
-    public abstract String iconLocation();
-
-    public abstract String serviceApiName();
-
-    public abstract String serviceDescription();
-
-    public abstract String databaseQueryRoute();
-
-    public abstract String databaseMultipleQueryRoute();
-
-    public abstract EntityManager getEntityManager();
-
-    public abstract List<Map<String, String>> logUrls();
-
-    public abstract Map<String, Object> userStatistics();
-
-    public abstract Map<String, Object> earningStatistics();
+    Map<String, Object> introspect;
+    Map<String, Object> resourcesMap;
+    @Value("${spring.jackson.property-naming-strategy:CAMEL_CASE}") String namingStrategy;
 
     public abstract Logger getLogger();
-
-    public abstract String buildTableColumnQuery(String tableName);
-
+    public abstract String serviceName();
     public abstract boolean isServiceOk();
-
+    public abstract long downloadsCount();
+    public abstract String iconLocation();
+    public abstract String serviceApiName();
+    public abstract String serviceDescription();
+    public abstract String databaseQueryRoute();
+    public abstract EntityManager getEntityManager();
+    public abstract List<Map<String, String>> logUrls();
+    public abstract String databaseMultipleQueryRoute();
+    public abstract Map<String, Integer> userStatistics();
+    public abstract Map<String, Integer> earningStatistics();
+    public abstract List<Class<? extends Model>> resources();
+    public abstract String buildTableColumnQuery(String tableName);
+    public abstract boolean principalCan(HttpServletRequest httpServletRequest, String dbMethod);
     public abstract <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message);
 
-    public abstract boolean principalCan(HttpServletRequest httpServletRequest, String dbMethod);
+    @PostConstruct
+    void setup() {
+        resolveResources();
+        resolveIntrospect();
+    }
 
     @RequestMapping(value = "/health", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> healthCheck() {
@@ -70,21 +72,14 @@ public abstract class BactuatorController {
 
     @RequestMapping(value = "/introspect", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> introspect() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("name", serviceName());
-        response.put("description", serviceDescription());
-        response.put("icon_location", iconLocation());
-        response.put("service_api_name", serviceApiName());
-        response.put("users", userStatistics());
-        response.put("earnings", earningStatistics());
-        response.put("download_counts", downloadsCount());
-        response.put("log_urls", logUrls());
-        response.put("database_query_route", databaseQueryRoute());
-        response.put("database_multiple_query_route", databaseMultipleQueryRoute());
-        return processResponse(HttpStatus.OK, response, "introspect data fetched successfully");
+        introspect.put("users", userStatistics());
+        introspect.put("earnings", earningStatistics());
+        introspect.put(resolveCasing("downloadCounts"), downloadsCount());
+        return processResponse(HttpStatus.OK, introspect, "introspect data fetched successfully");
     }
 
-    Object executeQueryForResult(HttpServletRequest httpServletRequest, String queryString, boolean includeColumnNames) {
+    Object executeQueryForResult(HttpServletRequest httpServletRequest, String queryString, boolean includeColumnNames)
+    {
         try {
             Query query = getEntityManager().createNativeQuery(queryString);
             if (queryString.toLowerCase().contains("update")) {
@@ -117,7 +112,8 @@ public abstract class BactuatorController {
             }
             String tableName = queryString.substring(queryString.indexOf("FROM")+4).trim();
             tableName = tableName.substring(0, (tableName+" ").indexOf(" "));
-            List<String> columnNames = getEntityManager().createNativeQuery(buildTableColumnQuery(tableName)).getResultList();
+            List<String> columnNames = getEntityManager()
+                    .createNativeQuery(buildTableColumnQuery(tableName)).getResultList();
             List<Object> result = new ArrayList<>();
             result.add(columnNames);
             result.addAll(query.getResultList());
@@ -159,6 +155,100 @@ public abstract class BactuatorController {
             }
         }
         return processResponse(HttpStatus.OK, response, SQL_QUERY_SUCCESSFUL);
+    }
+
+    void resolveIntrospect() {
+        introspect = new HashMap<>();
+        introspect.put("name", serviceName());
+        introspect.put("description", serviceDescription());
+        introspect.put(resolveCasing("iconLocation"), iconLocation());
+        introspect.put(resolveCasing("serviceApiName"), serviceApiName());
+        introspect.put(resolveCasing("logUrls"), logUrls());
+        introspect.put(resolveCasing("databaseQueryRoute"), databaseQueryRoute());
+        introspect.put(resolveCasing("databaseMultipleQueryRoute"), databaseMultipleQueryRoute());
+        introspect.put("resources", resourcesMap);
+    }
+
+    void resolveResources() {
+        resourcesMap = new HashMap<>();
+        List<Class<? extends Model>> models = resources();
+        if (models == null) return;
+        for (Class<? extends Model> model : models) {
+            Map<String, Object> modelMap = new HashMap<>();
+            List<Field> fields = FieldUtil.getAllFields(model);
+            Map<String, Object> fieldsAttrs = new HashMap<>();
+            for (Field field : fields) {
+                Map<String, Object> fieldAttrs = new HashMap<>();
+                fieldAttrs.put("type", field.getType().getName());
+
+                Map<String, Boolean> statProps = new HashMap<>();
+                statProps.put(resolveCasing("medianQuery"),
+                        field.getAnnotationsByType(StatQuery.MedianQuery.class).length > 0);
+                statProps.put(resolveCasing("columnQuery"),
+                        field.getAnnotationsByType(StatQuery.ColumnQuery.class).length > 0);
+                statProps.put(resolveCasing("averageQuery"),
+                        field.getAnnotationsByType(StatQuery.AverageQuery.class).length > 0);
+                statProps.put(resolveCasing("occurrenceQuery"),
+                        field.getAnnotationsByType(StatQuery.OccurrenceQuery.class).length > 0);
+                statProps.put(resolveCasing("percentageChangeQuery"),
+                        field.getAnnotationsByType(StatQuery.PercentageChangeQuery.class).length > 0);
+                fieldAttrs.put("stat", statProps);
+
+                // query params
+                List<Object> queryProps = new ArrayList<>();
+                RequestParamFilter[] requestParamFilters = field.getAnnotationsByType(RequestParamFilter.class);
+                for (RequestParamFilter requestParamFilter : requestParamFilters) {
+                    if (requestParamFilter.operator() == RequestParamFilter.Operator.RANGE) {
+                        queryProps.add(getOperatorQueryObj(requestParamFilters.length, field.getName(),
+                                requestParamFilter.operator().name() + "_FROM", requestParamFilter));
+                        queryProps.add(getOperatorQueryObj(requestParamFilters.length, field.getName(),
+                                requestParamFilter.operator().name() + "_TO", requestParamFilter));
+                        continue;
+                    }
+                    queryProps.add(getOperatorQueryObj(requestParamFilters.length, field.getName(),
+                            requestParamFilter.operator().name(), requestParamFilter));
+                }
+                fieldAttrs.put("query", queryProps);
+
+                fieldsAttrs.put(field.getName(), fieldAttrs);
+            }
+            StatQuery statQuery = FieldUtil.getAnnotation(model, StatQuery.class);
+            if (statQuery != null) {
+                Map<String, Object> statAttrs = new HashMap<>();
+                statAttrs.put(resolveCasing("fetchHourly"), statQuery.fetchHourly());
+                statAttrs.put(resolveCasing("fetchYearly"), statQuery.fetchYearly());
+                statAttrs.put(resolveCasing("fetchMonthly"), statQuery.fetchMonthly());
+                statAttrs.put(resolveCasing("fetchPrevious"), statQuery.fetchPrevious());
+                statAttrs.put(resolveCasing("fetchWeekDays"), statQuery.fetchWeekDays());
+                statAttrs.put(resolveCasing("fetchMonthDays"), statQuery.fetchMonthDays());
+                statAttrs.put(resolveCasing("intervalColumn"), statQuery.intervalColumn());
+                statAttrs.put(resolveCasing("enableClientQuery"), statQuery.enableClientQuery());
+                statAttrs.put(resolveCasing("columnsAreSnakeCase"), statQuery.columnsAreSnakeCase());
+                modelMap.put("stat", statAttrs);
+            }
+            modelMap.put(resolveCasing("fields"), fieldsAttrs);
+            resourcesMap.put(model.getSimpleName(), modelMap);
+        }
+    }
+
+    String resolveCasing(String value) {
+        return (namingStrategy.equalsIgnoreCase("SNAKE_CASE")
+                ? FieldUtil.toSnakeCase(value) : value);
+    }
+
+    Map<String, String> getOperatorQueryObj(int length, String name, String operator,
+                                            RequestParamFilter requestParamFilter) {
+        String fieldName = length > 1
+                ? String.format("%s%s%c%s", name,
+                requestParamFilter.multiFilterSeparator().equals("__") &&
+                        namingStrategy.equalsIgnoreCase("SNAKE_CASE")
+                        ? "_" : requestParamFilter.multiFilterSeparator(),
+                operator.charAt(0),
+                operator.substring(1).toLowerCase())
+                : name;
+        Map<String, String> requestParamFilterProps = new HashMap<>();
+        requestParamFilterProps.put(operator, resolveCasing(fieldName));
+        return requestParamFilterProps;
     }
 
 }
