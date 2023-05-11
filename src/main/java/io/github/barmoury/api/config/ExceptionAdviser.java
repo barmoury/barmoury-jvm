@@ -1,13 +1,11 @@
 package io.github.barmoury.api.config;
 
-import io.github.barmoury.api.exception.InvalidBactuatorQueryException;
-import io.github.barmoury.api.exception.InvalidLoginException;
-import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
-import io.github.barmoury.api.exception.SubModelResolveException;
+import io.github.barmoury.api.exception.*;
 import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.SignatureException;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ValidationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessResourceUsageException;
@@ -46,6 +44,17 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
         List<Object> errors = new ArrayList<>();
         for (ObjectError objectError : ex.getBindingResult().getAllErrors()) {
             errors.add(objectError.getDefaultMessage());
+        }
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Object handleValidationExceptions(ConstraintViolationException ex) {
+        List<Object> errors = new ArrayList<>();
+        for (ConstraintViolation<?> constraintViolation : ex.getConstraintViolations()) {
+            errors.add(constraintViolation.getMessage());
         }
         return processResponse(ex, errors);
     }

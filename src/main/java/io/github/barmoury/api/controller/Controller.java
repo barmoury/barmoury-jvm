@@ -1,6 +1,7 @@
 package io.github.barmoury.api.controller;
 
 import io.github.barmoury.api.ValidationGroups;
+import io.github.barmoury.api.exception.ConstraintViolationException;
 import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
 import io.github.barmoury.api.model.Model;
 import io.github.barmoury.api.model.UserDetails;
@@ -31,10 +32,7 @@ import org.springframework.web.servlet.HandlerMapping;
 
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 // TODO validate list of entity for multiple
 public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
@@ -232,10 +230,10 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                 .usingContext()
                 .constraintValidatorPayload((resource).getId())
                 .getValidator();
-        List<ConstraintViolation<T2>> errors =
-                new ArrayList<>(validator.validate(request, ValidationGroups.Update.class));
+        Set<? extends ConstraintViolation<?>> errors = validator
+                .validate(request, ValidationGroups.Update.class);
         if (!errors.isEmpty()) {
-            throw new IllegalArgumentException(errors.get(0).getMessage());
+            throw new ConstraintViolationException(request.getClass(), errors);
         }
         this.preUpdate(httpServletRequest, authentication, resource, request);
         String msg = validateBeforeCommit(resource);
