@@ -7,6 +7,7 @@ import jakarta.persistence.JoinColumn;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.*;
 
 public class FieldUtil {
@@ -79,6 +80,14 @@ public class FieldUtil {
             fields.addAll(Arrays.asList(c.getDeclaredFields()));
         }
         return fields;
+    }
+
+    public static List<Method> getAllMethods(Class<?> type) {
+        List<Method> methods = new ArrayList<>();
+        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+            methods.addAll(Arrays.asList(c.getDeclaredMethods()));
+        }
+        return methods;
     }
 
     public static Field getDeclaredField(Class<?> type, String name) {

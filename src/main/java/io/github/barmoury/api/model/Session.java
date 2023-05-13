@@ -60,7 +60,6 @@ public class Session<T> extends Model {
 
     @Transient T actor;
 
-    @Transient
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
     @Column(columnDefinition = "TEXT") @Convert(converter = Isp.Converter.class)
     Isp isp;

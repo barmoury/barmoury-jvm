@@ -24,36 +24,50 @@ import java.util.UUID;
         fetchYearly = true, fetchWeekDays = true, fetchMonthDays = true, enableClientQuery = true)
 public class Audit<T> extends Model {
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     String type;
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     String group;
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     String status;
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     String source;
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     String action;
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     String actorId;
 
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
     String actorType;
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     String ipAddress;
 
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
@@ -62,6 +76,7 @@ public class Audit<T> extends Model {
 
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @Column(columnDefinition = "VARCHAR")
+    @Builder.Default
     UUID auditId = UUID.randomUUID();
 
     @Transient T actor;

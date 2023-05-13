@@ -157,7 +157,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
 
     @SuppressWarnings("unchecked")
     @RequestMapping(value = "/multiple", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> store(HttpServletRequest httpServletRequest, Authentication authentication,
+    public ResponseEntity<?> storeMultiple(HttpServletRequest httpServletRequest, Authentication authentication,
                                    @Validated(ValidationGroups.Create.class)
                                    @Valid @NotEmpty(message = "The request list cannot be empty") @RequestBody
                                    List<@Valid T2> entityRequests)
