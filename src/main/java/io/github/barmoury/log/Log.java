@@ -1,4 +1,4 @@
-package io.github.barmoury.logger;
+package io.github.barmoury.log;
 
 import io.github.barmoury.api.model.Model;
 import io.github.barmoury.eloquent.RequestParamFilter;
@@ -16,10 +16,12 @@ import lombok.EqualsAndHashCode;
         fetchYearly = true, fetchWeekDays = true, fetchMonthDays = true, enableClientQuery = true)
 public class Log extends Model {
 
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.STARTS_WITH)
     @RequestParamFilter(operator = RequestParamFilter.Operator.ENDS_WITH)
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.EQ)
+    @StatQuery.OccurrenceQuery
     @Builder.Default
     Level level = Level.INFO;
 
@@ -59,7 +61,8 @@ public class Log extends Model {
         WARN,
         ERROR,
         TRACE,
-        FATAL
+        FATAL,
+        VERBOSE
     }
 
 

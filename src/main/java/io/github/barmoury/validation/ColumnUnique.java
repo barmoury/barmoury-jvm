@@ -24,6 +24,7 @@ public @interface ColumnUnique {
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
     String table() default "";
+    String whereClause() default "";
     String column();
     boolean nullable() default false;
 
@@ -32,6 +33,7 @@ public @interface ColumnUnique {
         boolean nullable;
         String table;
         String column;
+        String whereClause;
         Class<?>[] groups;
 
         @Autowired
@@ -44,6 +46,7 @@ public @interface ColumnUnique {
             this.column = constraintAnnotation.column();
             this.groups = constraintAnnotation.groups();
             this.nullable = constraintAnnotation.nullable();
+            this.whereClause = constraintAnnotation.whereClause();
         }
 
         @Override
@@ -51,7 +54,8 @@ public @interface ColumnUnique {
             // TODO, auto fetch column
             if (this.nullable && o == null) return true;
             Long rowId = null;
-            String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self", table, column);
+            String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self %s", table, column,
+                    (whereClause.isBlank() ? "" : " AND " + whereClause));
             if (constraintValidatorContext instanceof HibernateConstraintValidatorContext) {
                 rowId = constraintValidatorContext
                         .unwrap(HibernateConstraintValidatorContext.class)

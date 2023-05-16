@@ -9,8 +9,8 @@ import java.io.Serializable;
 @Data
 public class Location implements Serializable {
 
-    long latitude;
-    long longitude;
+    double latitude;
+    double longitude;
     String state;
     String country;
     String address;

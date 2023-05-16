@@ -1,7 +1,5 @@
 package io.github.barmoury.cache.cacheinterface;
 
-import io.github.barmoury.audit.Audit;
-import io.github.barmoury.audit.Auditor;
 import io.github.barmoury.cache.Cache;
 import org.springframework.stereotype.Component;
 
@@ -9,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-public class ListCacheImpl<T>  implements Cache<T> {
+public class ListCacheImpl<T> implements Cache<T> {
 
     List<T> cached = new ArrayList<>();
 

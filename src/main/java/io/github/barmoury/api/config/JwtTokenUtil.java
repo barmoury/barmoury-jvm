@@ -23,7 +23,7 @@ public abstract class JwtTokenUtil {
 
     public abstract String getSecret();
 
-    public abstract Logger getLogger();
+    public abstract void log(String message, Exception exception);
 
     public IEncryptor<Object> getEncryptor() {
         return null;
@@ -109,9 +109,8 @@ public abstract class JwtTokenUtil {
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             RSAPublicKey pubKey = (RSAPublicKey) keyFactory.generatePublic(keySpecX509);
             return Optional.of(pubKey);
-
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-            getLogger().error("Exception block | Public key parsing error ", e);
+            log("Exception block | Public key parsing error ", e);
             return Optional.empty();
         }
     }

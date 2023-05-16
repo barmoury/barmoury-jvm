@@ -5,6 +5,7 @@ import io.github.barmoury.converter.ObjectConverterImpl;
 import io.github.barmoury.eloquent.RequestParamFilter;
 import io.github.barmoury.eloquent.StatQuery;
 import io.github.barmoury.trace.Device;
+import io.github.barmoury.trace.Isp;
 import io.github.barmoury.trace.Location;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -80,6 +81,11 @@ public class Audit<T> extends Model {
     UUID auditId = UUID.randomUUID();
 
     @Transient T actor;
+
+    @Column(columnDefinition = "TEXT") @Convert(converter = Isp.Converter.class)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
+    Isp isp;
 
     @Column(columnDefinition = "TEXT") @Convert(converter = Device.Converter.class)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)

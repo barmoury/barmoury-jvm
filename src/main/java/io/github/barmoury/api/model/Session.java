@@ -60,19 +60,23 @@ public class Session<T> extends Model {
 
     @Transient T actor;
 
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
     @Column(columnDefinition = "TEXT") @Convert(converter = Isp.Converter.class)
     Isp isp;
 
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
     @Column(columnDefinition = "TEXT") @Convert(converter = Device.Converter.class)
     Device device;
 
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
     @Column(columnDefinition = "TEXT") @Convert(converter = Location.Converter.class)
     Location location;
 
     @Column(columnDefinition = "TEXT") @Convert(converter = ObjectConverterImpl.class)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE, columnObjectFieldsIsSnakeCase = false)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE, columnObjectFieldsIsSnakeCase = false)
     Object extraData;
 
