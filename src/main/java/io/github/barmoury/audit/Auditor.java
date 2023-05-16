@@ -17,6 +17,7 @@ public abstract class Auditor<T> {
     public abstract void preAudit(Audit<T> audit);
 
     public void audit(Audit<T> audit) {
+        this.preAudit(audit);
         bufferSize++;
         if (Util.cacheWriteAlong(bufferSize, dateLastFlushed, getCache(), audit)) {
             bufferSize = 0;
