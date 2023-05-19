@@ -142,11 +142,11 @@ public class PgpDecryption {
                             this.pgpManager.getVerifiableOnePassSignature(pgpOnePassSignatureList, verifyingKeys);
                 } else if (pgpObject instanceof PGPLiteralData) {
                     PGPOnePassSignature onePassSignature = possibleOnePassSignature
-                            .orElseThrow(() -> new PgpDecryptionException("No one pass signature present."));
+                            .orElseThrow(() -> new PgpSignatureException("No one pass signature present."));
                     readLiteralData(plainStream, (PGPLiteralData) pgpObject, onePassSignature);
                 } else if (pgpObject instanceof PGPSignatureList pgpSignatureList) {
                     PGPOnePassSignature onePassSignature = possibleOnePassSignature
-                            .orElseThrow(() -> new PgpDecryptionException("No one pass signature present."));
+                            .orElseThrow(() -> new PgpSignatureException("No one pass signature present."));
                     signatureVerified = this.pgpManager.verifyAnySignature(pgpSignatureList, onePassSignature);
                 }
             }
@@ -158,7 +158,7 @@ public class PgpDecryption {
                 throw new PgpDecryptionException("Message failed integrity check");
             }
             if (!signatureVerified) {
-                throw new PgpDecryptionException("Signature not verified");
+                throw new PgpSignatureException("Signature not verified");
             }
         } catch (IOException | PGPException exception) {
             throw new PgpDecryptionException("Cipher text reading error", exception);
@@ -197,7 +197,7 @@ public class PgpDecryption {
                 PGPOnePassSignature onePassSignature;
                 if (signed) {
                     onePassSignature = possibleOnePassSignature.orElseThrow(
-                            () -> new PgpDecryptionException("No one pass signature present.")
+                            () -> new PgpSignatureException("No one pass signature present.")
                     );
                     readLiteralData(clearOut, (PGPLiteralData) message, onePassSignature);
                     continue;
@@ -216,7 +216,7 @@ public class PgpDecryption {
                     throw new PGPException("Encrypted message contains a signed message not literal data");
                 }
                 PGPOnePassSignature onePassSignature = possibleOnePassSignature
-                        .orElseThrow(() -> new PgpDecryptionException("No one pass signature present."));
+                        .orElseThrow(() -> new PgpSignatureException("No one pass signature present."));
                 signatureVerified = pgpManager.verifyAnySignature(pgpSignatureList, onePassSignature);
             } else {
                 throw new PGPException("Message is not a simple encrypted file - Type Unknown");
@@ -232,7 +232,7 @@ public class PgpDecryption {
 
         // validate signature verification
         if (!signatureVerified) {
-            throw new PgpDecryptionException("Signature not verified");
+            throw new PgpSignatureException("Signature not verified");
         }
     }
 

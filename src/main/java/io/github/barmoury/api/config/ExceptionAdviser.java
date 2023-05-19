@@ -5,6 +5,7 @@ import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.SignatureException;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ValidationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -316,11 +317,11 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     }
 
     @ResponseBody
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(ValidationException.class)
-    public Object handleException(ValidationException ex) {
+    public Object handleException(ValidationException ex, HttpServletResponse response) {
         List<Object> errors = new ArrayList<>();
         errors.add("An error occur while trying to validate the payload body");
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         return processResponse(ex, errors);
     }
 

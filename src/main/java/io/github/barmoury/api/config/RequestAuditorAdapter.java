@@ -26,12 +26,14 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAd
 import java.lang.reflect.Type;
 import java.util.*;
 
-// TODO, update the audit to add response if get still exist, add filter for headers to ignore or star values
 @ControllerAdvice
 public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter implements HandlerInterceptor {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Autowired
+    HttpServletRequest request;
 
     @Autowired
     HttpServletRequest httpServletRequest;
@@ -41,12 +43,20 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
     public abstract Auditor<Object> getAuditor();
     public abstract IpData getIpData(String ipAddress);
 
-    public <T> Audit<T> resolve(Audit<T> audit) {
+    public <T> Audit<T> resolve(HttpServletRequest request, Audit<T> audit) {
         return audit;
     }
 
     public <T> T beforeAuditable(T object) {
         return object;
+    }
+
+    public Object headerSanitizer(String headerName, Object value) {
+        if (headerName.toLowerCase().contains("authorization")
+                || headerName.toLowerCase().contains("key")) {
+            return "**********";
+        }
+        return value;
     }
 
     @Override
@@ -65,7 +75,7 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
         objectNode.set("headers", objectMapper.convertValue(resolveHeaders(httpServletRequest), JsonNode.class));
         objectNode.set("parameters", objectMapper.convertValue(httpServletRequest.getParameterMap(), JsonNode.class));
         IpData ipData = this.getIpData(httpServletRequest.getRemoteAddr());
-        getAuditor().audit(resolve(Audit.builder()
+        getAuditor().audit(resolve(request, Audit.builder()
                 .type("HTTP.REQUEST")
                 .isp(ipData.getIsp())
                 .extraData(objectNode)
@@ -90,7 +100,7 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
             objectNode.set("headers", objectMapper.convertValue(resolveHeaders(httpServletRequest), JsonNode.class));
             objectNode.set("parameters", objectMapper.convertValue(httpServletRequest.getParameterMap(), JsonNode.class));
             IpData ipData = this.getIpData(httpServletRequest.getRemoteAddr());
-            getAuditor().audit(resolve(Audit.builder()
+            getAuditor().audit(resolve(request, Audit.builder()
                     .type("HTTP.REQUEST")
                     .isp(ipData.getIsp())
                     .extraData(objectNode)
@@ -131,12 +141,7 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
         Enumeration<String> headerNames = request.getHeaderNames();
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
-            if (headerName.toLowerCase().contains("authorization")
-                    || headerName.toLowerCase().contains("key")) {
-                headers.put(headerName, "**********");
-                continue;
-            }
-            headers.put(headerName, request.getHeader(headerName));
+            headers.put(headerName, String.valueOf(headerSanitizer(headerName, request.getHeader(headerName))));
         }
         return headers;
     }

@@ -263,7 +263,7 @@ public class PgpManager {
             break;
         }
         if (possibleSignature == null) {
-            throw new PgpDecryptionException("No matching signature present");
+            throw new PgpSignatureException("No matching signature present");
         }
         return onePassSignature.verify(possibleSignature);
     }

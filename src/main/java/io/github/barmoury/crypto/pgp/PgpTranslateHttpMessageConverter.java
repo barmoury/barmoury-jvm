@@ -3,6 +3,7 @@ package io.github.barmoury.crypto.pgp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.barmoury.api.config.PgpConfig;
 import io.github.barmoury.api.exception.ConstraintViolationException;
+import io.github.barmoury.api.exception.PgpConstraintViolationException;
 import io.github.barmoury.util.FieldUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
@@ -48,8 +49,8 @@ public class PgpTranslateHttpMessageConverter extends AbstractHttpMessageConvert
         PgpTranslate requestBody = objectMapper
                 .readValue(PgpConfig.decodeEncryptedString(new String(inputMessage.getBody()
                         .readAllBytes(), PgpConfig.getCharset())), clazz);
-        Valid valid = requestBody.getClass().getAnnotation(Valid.class);
-        Validated validated = requestBody.getClass().getAnnotation(Validated.class);
+        Valid valid = clazz.getAnnotation(Valid.class);
+        Validated validated = clazz.getAnnotation(Validated.class);
         if (valid == null && validated == null) return requestBody;
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
@@ -57,7 +58,7 @@ public class PgpTranslateHttpMessageConverter extends AbstractHttpMessageConvert
                 .getValidator();
         Set<? extends ConstraintViolation<?>> errors = validator.validate(requestBody);
         if (!errors.isEmpty()) {
-            throw new ConstraintViolationException(clazz, errors);
+            throw new PgpConstraintViolationException(clazz, errors);
         }
         return requestBody;
     }

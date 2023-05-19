@@ -2,6 +2,7 @@ package io.github.barmoury.api.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.barmoury.api.exception.ConstraintViolationException;
+import io.github.barmoury.api.exception.PgpConstraintViolationException;
 import io.github.barmoury.crypto.pgp.PgpRequestHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -48,7 +49,7 @@ public class PgpRequestBodyTranslator implements HandlerInterceptor {
                     .getValidator();
             Set<? extends ConstraintViolation<?>> errors = validator.validate(requestBody);
             if (!errors.isEmpty()) {
-                throw new ConstraintViolationException(pgpRequestHandler.value(), errors);
+                throw new PgpConstraintViolationException(pgpRequestHandler.value(), errors);
             }
         }
         return true;
