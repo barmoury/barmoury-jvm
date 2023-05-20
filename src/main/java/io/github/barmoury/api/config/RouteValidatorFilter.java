@@ -26,7 +26,7 @@ public abstract class RouteValidatorFilter extends OncePerRequestFilter {
         ValidationExecutor validationExecutor = routeValidationExecutors
                 .getOrDefault(String.format("%s<=#=>%s", method, route),
                         routeValidationExecutors.get(String.format("ANY<=#=>%s", route)));
-        if (validationExecutor != null && !validationExecutor.valid(request)) {
+        if (validationExecutor != null && !validationExecutor.valid(request, response)) {
             processResponse(response, "Validation failed for the request");
             return;
         }
@@ -47,7 +47,7 @@ public abstract class RouteValidatorFilter extends OncePerRequestFilter {
     }
 
     public interface ValidationExecutor {
-        boolean valid(HttpServletRequest request);
+        boolean valid(HttpServletRequest request, HttpServletResponse response);
     }
 
 }
