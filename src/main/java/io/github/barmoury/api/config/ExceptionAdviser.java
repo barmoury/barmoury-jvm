@@ -1,12 +1,12 @@
 package io.github.barmoury.api.config;
 
-import io.github.barmoury.api.exception.InvalidBactuatorQueryException;
-import io.github.barmoury.api.exception.InvalidLoginException;
-import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
-import io.github.barmoury.api.exception.SubModelResolveException;
+import io.github.barmoury.api.exception.*;
 import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.SignatureException;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ValidationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessResourceUsageException;
@@ -51,6 +51,17 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
 
     @ResponseBody
     @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Object handleValidationExceptions(ConstraintViolationException ex) {
+        List<Object> errors = new ArrayList<>();
+        for (ConstraintViolation<?> constraintViolation : ex.getConstraintViolations()) {
+            errors.add(constraintViolation.getMessage());
+        }
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(BindException.class)
     public Object handleValidationExceptions(BindException ex) {
         List<Object> errors = new ArrayList<>();
@@ -84,6 +95,15 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(AccessDeniedException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Access denied. You do not have access to this file");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(SignatureException.class)
+    public Object handleException(SignatureException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("Access denied. You do not have access to this resource. Suspicious request.");
         return processResponse(ex, errors);
     }
 
@@ -297,11 +317,11 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     }
 
     @ResponseBody
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(ValidationException.class)
-    public Object handleException(ValidationException ex) {
+    public Object handleException(ValidationException ex, HttpServletResponse response) {
         List<Object> errors = new ArrayList<>();
         errors.add("An error occur while trying to validate the payload body");
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         return processResponse(ex, errors);
     }
 

@@ -3,6 +3,7 @@ package io.github.barmoury.copier;
 import io.github.barmoury.util.FieldUtil;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 public class Copier {
 
@@ -21,7 +22,7 @@ public class Copier {
                     fields[counter][0] = sources[counter];
                     fields[counter][1] = subField;
                 }
-                boolean fieldIsAccessible = field.canAccess(target);
+                boolean fieldIsAccessible = Modifier.isStatic(field.getModifiers()) || field.canAccess(target);
                 if (!fieldIsAccessible) field.setAccessible(true);
                 Object value = findUsableValue(fields);
                 if (value != null) {
@@ -37,10 +38,10 @@ public class Copier {
                         else if (FieldUtil.objectsHasAnyType(field.getType(), short.class, Short.class) && ((Short) value > 0))
                         { field.set(target, value); }
                         else if (FieldUtil.objectsHasAnyType(field.getType(), byte.class, Byte.class) && ((Byte) value > 0))
-                        { field.set(target, value); } // maybe check type matches
+                        { field.set(target, value); }
                         else if (FieldUtil.objectsHasAnyType(field.getType(), char.class, Character.class) && ((Character) value > 0))
                         { field.set(target, value); }
-                    } else { field.set(target, value); }
+                    } else { field.set(target, value); } // maybe check type matches
                 } else if (copyProperty != null && copyProperty.priority() == CopyProperty.CopyValuePriority.SOURCE &&
                     !FieldUtil.isPrimitive(field)) {
                     field.set(target, null);
@@ -67,7 +68,7 @@ public class Copier {
             Object source = objects[0];
             Field field = (Field) objects[1];
             types[index] = field.getType();
-            fieldIsAccessible[index] = field.canAccess(source);
+            fieldIsAccessible[index] = Modifier.isStatic(field.getModifiers()) || field.canAccess(source);
             if (!fieldIsAccessible[index]) field.setAccessible(true);
             values[index] = field.get(source);
             if (allValueIsNull && values[index] != null) allValueIsNull = false;

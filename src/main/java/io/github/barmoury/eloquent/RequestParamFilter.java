@@ -14,7 +14,7 @@ public @interface RequestParamFilter {
     boolean acceptSnakeCase() default true;
     Operator operator() default Operator.EQ;
     boolean columnIsSnakeCase() default true;
-    String multiFilterSeparator() default "-";
+    String multiFilterSeparator() default "__";
     boolean columnObjectFieldsIsSnakeCase() default true;
 
     @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.FIELD)
@@ -29,15 +29,20 @@ public @interface RequestParamFilter {
         NE,
         IN,
         LIKE,
+        ILIKE,
         GT_EQ,
         LT_EQ,
+        RANGE,
         ENTITY,
+        NOT_IN,
         BETWEEN,
         NOT_LIKE,
         CONTAINS,
+        NOT_ILIKE,
         OBJECT_EQ,
         OBJECT_NE,
         ENDS_WITH,
+        NOT_BETWEEN,
         STARTS_WITH,
         OBJECT_LIKE,
         NOT_CONTAINS,

@@ -1,6 +1,7 @@
 package io.github.barmoury.api.controller;
 
 import io.github.barmoury.api.ValidationGroups;
+import io.github.barmoury.api.exception.ConstraintViolationException;
 import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
 import io.github.barmoury.api.model.Model;
 import io.github.barmoury.api.model.UserDetails;
@@ -31,10 +32,7 @@ import org.springframework.web.servlet.HandlerMapping;
 
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 // TODO validate list of entity for multiple
 public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
@@ -49,7 +47,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     static final String ACCESS_DENIED = "Access denied. You do not have the required role to access this endpoint";
 
     public void preResponse(T1 entity) {}
-    public void preQuery(HttpServletRequest request) {}
+    public void preQuery(HttpServletRequest request, Authentication authentication) {}
     public void preCreate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postCreate(HttpServletRequest request, Authentication authentication, T1 entity) {}
     public void preUpdate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
@@ -105,7 +103,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     }
 
     @RequestMapping(value = "/stat", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> stat(HttpServletRequest request) throws ParseException {
+    public ResponseEntity<?> stat(HttpServletRequest request, Authentication authentication) throws ParseException {
         if (shouldNotHonourMethod(RouteMethod.STAT)) {
             throw new RouteMethodNotSupportedException("The GET '**/stat' route is not supported for this resource");
         }
@@ -113,12 +111,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        preQuery(request);
+        preQuery(request, authentication);
         return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
     @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> index(HttpServletRequest request, Pageable pageable) {
+    public ResponseEntity<?> index(HttpServletRequest request, Authentication authentication, Pageable pageable) {
         if (shouldNotHonourMethod(RouteMethod.INDEX)) {
             throw new RouteMethodNotSupportedException("The GET '**/' route is not supported for this resource");
         }
@@ -126,7 +124,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        preQuery(request);
+        preQuery(request, authentication);
         Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass);
         resources.forEach(this::preResponse);
         return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
@@ -159,7 +157,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
 
     @SuppressWarnings("unchecked")
     @RequestMapping(value = "/multiple", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> store(HttpServletRequest httpServletRequest, Authentication authentication,
+    public ResponseEntity<?> storeMultiple(HttpServletRequest httpServletRequest, Authentication authentication,
                                    @Validated(ValidationGroups.Create.class)
                                    @Valid @NotEmpty(message = "The request list cannot be empty") @RequestBody
                                    List<@Valid T2> entityRequests)
@@ -232,10 +230,10 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                 .usingContext()
                 .constraintValidatorPayload((resource).getId())
                 .getValidator();
-        List<ConstraintViolation<T2>> errors =
-                new ArrayList<>(validator.validate(request, ValidationGroups.Update.class));
+        Set<? extends ConstraintViolation<?>> errors = validator
+                .validate(request, ValidationGroups.Update.class);
         if (!errors.isEmpty()) {
-            throw new IllegalArgumentException(errors.get(0).getMessage());
+            throw new ConstraintViolationException(request.getClass(), errors);
         }
         this.preUpdate(httpServletRequest, authentication, resource, request);
         String msg = validateBeforeCommit(resource);

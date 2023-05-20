@@ -4,6 +4,7 @@ import io.github.barmoury.converter.ObjectConverterImpl;
 import io.github.barmoury.eloquent.RequestParamFilter;
 import io.github.barmoury.eloquent.StatQuery;
 import io.github.barmoury.trace.Device;
+import io.github.barmoury.trace.Isp;
 import io.github.barmoury.trace.Location;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -23,7 +24,7 @@ public class Session<T> extends Model {
     @StatQuery.PercentageChangeQuery
     @StatQuery.AverageQuery @StatQuery.MedianQuery
     @StatQuery.ColumnQuery(name = "%s_sum", sqlFunction = "SUM")
-    @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
     @StatQuery.PercentageChangeQuery(sqlFunction = "SUM", name = "%s_sum_percentage_change")
     long refreshCount;
 
@@ -44,7 +45,7 @@ public class Session<T> extends Model {
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     String lastAuthToken;
 
-    @RequestParamFilter(operator = RequestParamFilter.Operator.BETWEEN)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
     Date expirationDate;
 
     @StatQuery.OccurrenceQuery
@@ -59,15 +60,23 @@ public class Session<T> extends Model {
 
     @Transient T actor;
 
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
-    @Column(columnDefinition = "TEXT") @Convert(converter = Device.DeviceConverter.class)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Isp.Converter.class)
+    Isp isp;
+
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Device.Converter.class)
     Device device;
 
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE)
-    @Column(columnDefinition = "TEXT") @Convert(converter = Location.LocationConverter.class)
+    @Column(columnDefinition = "TEXT") @Convert(converter = Location.Converter.class)
     Location location;
 
     @Column(columnDefinition = "TEXT") @Convert(converter = ObjectConverterImpl.class)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE, columnObjectFieldsIsSnakeCase = false)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE, columnObjectFieldsIsSnakeCase = false)
     Object extraData;
 

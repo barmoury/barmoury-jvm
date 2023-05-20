@@ -95,7 +95,8 @@ public class QueryArmoury {
     }
 
     public <T> JsonNode statWithQuery(HttpServletRequest request, Class<T> clazz) throws ParseException {
-        String tableName = FieldUtil.getTableName(clazz);Map<String, JoinColumn> joinTables = new HashMap<>();
+        String tableName = FieldUtil.getTableName(clazz);
+        Map<String, JoinColumn> joinTables = new HashMap<>();
         StatQuery statQuery = FieldUtil.getAnnotation(clazz, StatQuery.class);
         MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables, false);
         MultiValuedMap<String, Object> statRequestFields = resolveQueryFields(clazz, request, null, true);
@@ -122,7 +123,10 @@ public class QueryArmoury {
                 String fieldName = mainFieldName;
                 if (requestParamFiltersCount > 1) {
                     String operator = requestParamFilter.operator().name();
-                    fieldName = String.format("%s_%c%s", fieldName, operator.charAt(0),
+                    fieldName = String.format("%s%s%c%s", fieldName,
+                            requestParamFilter.multiFilterSeparator().equals("__") && isSnakeCase
+                                    ? "_" : requestParamFilter.multiFilterSeparator(),
+                            operator.charAt(0),
                             operator.substring(1).toLowerCase());
                 }
                 Set<String> extraFieldNames = new HashSet<>();
@@ -133,7 +137,7 @@ public class QueryArmoury {
                         for (String extraFieldName : new ArrayList<>(extraFieldNames))
                             extraFieldNames.add(FieldUtil.toSnakeCase(extraFieldName));
                     }
-                    if (requestParamFilter.operator() == RequestParamFilter.Operator.BETWEEN) {
+                    if (requestParamFilter.operator() == RequestParamFilter.Operator.RANGE) {
                         Set<String> fromExtraFieldNames = new HashSet<>();
                         Set<String> toExtraFieldNames = new HashSet<>();
                         for (String extraFieldName : extraFieldNames) {
@@ -793,6 +797,7 @@ public class QueryArmoury {
                     Long count = (Long) row.get("count");
                     Object key = row.get(columnName);
                     if (key == null) continue;
+                    // TODO convert 0 and 1 to boolean if nooleanToInt is true
                     if (occurrenceQuery.type() == StatQuery.OccurrenceQuery.Type.PERCENTAGE) {
                         putStatField(occurrence, key.toString(), ((count * 100) / (double) totalCount));
                     } else {
@@ -845,6 +850,8 @@ public class QueryArmoury {
         return percentageMap;
     }
 
+    // percentage, say last month is 10 this month = 20
+    // ((20 - 10) / 10) * 100
     ObjectNode resolvePercentageChangeQueries(Map<String, Long> current, Map<String, Long> previous) {
         ObjectNode result = mapper.createObjectNode();
         for (Map.Entry<String, Long> entry : current.entrySet()) {
@@ -1033,6 +1040,8 @@ public class QueryArmoury {
             relationPart.append(String.format(" < :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.NE) {
             relationPart.append(String.format(" != :%s ", matchingFieldName));
+        } else if (operator == RequestParamFilter.Operator.IN) {
+            relationPart.append(String.format(" IN :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.GT_EQ) {
             relationPart.append(String.format(" >= :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.LT_EQ) {
@@ -1040,13 +1049,19 @@ public class QueryArmoury {
         } else if (operator == RequestParamFilter.Operator.LIKE
                 || operator == RequestParamFilter.Operator.CONTAINS) {
             relationPart.append(String.format(" LIKE CONCAT('%%', :%s, '%%')", matchingFieldName));
+        } else if (operator == RequestParamFilter.Operator.ILIKE) {
+            relationPart.append(String.format(" ILIKE CONCAT('%%', :%s, '%%')", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.NOT_LIKE
                 || operator == RequestParamFilter.Operator.NOT_CONTAINS) {
             relationPart.append(String.format(" NOT LIKE CONCAT('%%', :%s, '%%')", matchingFieldName));
+        } else if (operator == RequestParamFilter.Operator.NOT_ILIKE) {
+            relationPart.append(String.format(" NOT ILIKE CONCAT('%%', :%s, '%%')", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.ENDS_WITH) {
             relationPart.append(String.format(" LIKE CONCAT('%%', :%s)", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.STARTS_WITH) {
             relationPart.append(String.format(" LIKE CONCAT(:%s, '%%')", matchingFieldName));
+        } else if (operator == RequestParamFilter.Operator.NOT_IN) {
+            relationPart.append(String.format(" NOT IN :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.OBJECT_EQ) {
             relationPart.append(String.format(" LIKE CONCAT('%%\"%s\":', :%s, ',%%') OR entity.%s LIKE CONCAT('%%\"%s\":', :%s, '}')",
                     objectField, matchingFieldName, column, objectField, matchingFieldName));

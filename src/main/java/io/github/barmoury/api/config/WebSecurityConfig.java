@@ -1,5 +1,6 @@
 package io.github.barmoury.api.config;
 
+import io.github.barmoury.crypto.pgp.PgpTranslateHttpMessageConverter;
 import io.github.barmoury.eloquent.QueryArmoury;
 import io.github.barmoury.eloquent.sqlinterface.MySqlInterface;
 import jakarta.persistence.EntityManager;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -79,6 +81,11 @@ public class WebSecurityConfig implements WebMvcConfigurer {
         if (routeValidatorFilter != null) http.addFilterBefore(routeValidatorFilter, UsernamePasswordAuthenticationFilter.class);
         if (jwtRequestFilter != null) http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    @Override
+    public void configureMessageConverters (List<HttpMessageConverter<?>> converters) {
+        if (pgpPayloadTranslate) converters.add(new PgpTranslateHttpMessageConverter());
     }
 
     @Override

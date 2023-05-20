@@ -30,7 +30,8 @@ public class PgpTranslateDeserializer<T extends PgpTranslate> extends JsonDeseri
     }
 
     @Override
-    public JsonDeserializer<?> createContextual(DeserializationContext deserializationContext, BeanProperty beanProperty) throws JsonMappingException {
+    public JsonDeserializer<?> createContextual(DeserializationContext deserializationContext,
+                                                BeanProperty beanProperty) throws JsonMappingException {
         JavaType type = deserializationContext.getContextualType() != null
                 ? deserializationContext.getContextualType()
                 : beanProperty.getMember().getType();
@@ -40,14 +41,14 @@ public class PgpTranslateDeserializer<T extends PgpTranslate> extends JsonDeseri
     @Override
     @SneakyThrows
     @SuppressWarnings("unchecked")
-    public T deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException, JacksonException {
+    public T deserialize(JsonParser jsonParser, DeserializationContext deserializationContext)
+            throws IOException, JacksonException {
         String namingStrategy = PgpConfig.getNamingStrategy();
         Class<T> tClass = (Class<T>) type.getRawClass();
         JsonNode jsonNode = jsonParser.getCodec().readTree(jsonParser);
         if (FieldUtil.isSubclassOf(tClass, PgpTranslate.class) && jsonNode.isTextual()) {
             jsonNode = PgpConfig.getObjectMapper()
-                    .readTree(PgpConfig.getPgpDecryptor()
-                            .decrypt(Base64.decodeBase64(jsonNode.asText())));
+                    .readTree(PgpConfig.decodeEncryptedString(jsonNode.asText()));
         }
         T body = tClass.getConstructor().newInstance();
         List<Field> fields = FieldUtil.getAllFields(tClass);
@@ -71,8 +72,8 @@ public class PgpTranslateDeserializer<T extends PgpTranslate> extends JsonDeseri
                 else if (FieldUtil.objectsHasAnyType(field.getType(), String.class))
                 { field.set(body, value.asText()); }
                 else if (FieldUtil.isSubclassOf(field.getType(), PgpTranslate.class))
-                { field.set(body, PgpConfig.getObjectMapper().readValue(PgpConfig.getPgpDecryptor()
-                        .decrypt(Base64.decodeBase64(value.asText())), field.getType()));  }
+                { field.set(body, PgpConfig.getObjectMapper().readValue(PgpConfig.decodeEncryptedString(value.asText()),
+                        field.getType()));  }
                 else
                 { field.set(body, jsonParser.getCodec().treeToValue(value, field.getType())); }
                 if (!fieldIsAccessible) field.setAccessible(false);

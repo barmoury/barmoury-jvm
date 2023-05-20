@@ -1,19 +1,19 @@
 package io.github.barmoury.converter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.barmoury.crypto.Encryptor;
+import io.github.barmoury.crypto.IEncryptor;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Converter
-public abstract class EncryptorObjectConverter<T> implements AttributeConverter<T, String> {
+public abstract class EncryptorObjectConverter<T> implements AttributeConverter<T, Object> {
 
     @Autowired
     public ObjectMapper objectMapper;
 
-    public abstract Encryptor<String> getEncryptor();
+    public abstract IEncryptor<Object> getEncryptor();
 
     @Override
     @SneakyThrows
@@ -24,8 +24,8 @@ public abstract class EncryptorObjectConverter<T> implements AttributeConverter<
     @Override
     @SneakyThrows
     @SuppressWarnings("unchecked")
-    public T convertToEntityAttribute(String s) {
-        return (T) objectMapper.readValue(getEncryptor().decrypt(s), Object.class);
+    public T convertToEntityAttribute(Object s) {
+        return (T) objectMapper.readValue(getEncryptor().decrypt(s.toString()).toString(), Object.class);
     }
 
 }

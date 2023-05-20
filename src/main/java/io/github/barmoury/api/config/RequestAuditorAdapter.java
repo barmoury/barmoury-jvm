@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.barmoury.audit.Audit;
 import io.github.barmoury.audit.Auditor;
 import io.github.barmoury.trace.Device;
+import io.github.barmoury.trace.IpData;
+import io.github.barmoury.trace.Isp;
 import io.github.barmoury.trace.Location;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +26,6 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAd
 import java.lang.reflect.Type;
 import java.util.*;
 
-// TODO, update the audit to add response if get still exist, add filter for headers to ignore or star values
 @ControllerAdvice
 public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter implements HandlerInterceptor {
 
@@ -32,19 +33,30 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
     ObjectMapper objectMapper;
 
     @Autowired
+    HttpServletRequest request;
+
+    @Autowired
     HttpServletRequest httpServletRequest;
 
     Map<String, List<String>> excludeUrlPatterns = new HashMap<>();
 
-    public abstract Auditor<Object>  getAuditor();
-    public abstract Location getLocation(String ipAddress);
+    public abstract Auditor<Object> getAuditor();
+    public abstract IpData getIpData(String ipAddress);
 
-    public <T> Audit<T> resolve(Audit<T> audit) {
+    public <T> Audit<T> resolve(HttpServletRequest request, Audit<T> audit) {
         return audit;
     }
 
     public <T> T beforeAuditable(T object) {
         return object;
+    }
+
+    public Object headerSanitizer(String headerName, Object value) {
+        if (headerName.toLowerCase().contains("authorization")
+                || headerName.toLowerCase().contains("key")) {
+            return "**********";
+        }
+        return value;
     }
 
     @Override
@@ -62,13 +74,15 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
         ObjectNode objectNode = objectMapper.createObjectNode();
         objectNode.set("headers", objectMapper.convertValue(resolveHeaders(httpServletRequest), JsonNode.class));
         objectNode.set("parameters", objectMapper.convertValue(httpServletRequest.getParameterMap(), JsonNode.class));
-        getAuditor().audit(resolve(Audit.builder()
+        IpData ipData = this.getIpData(httpServletRequest.getRemoteAddr());
+        getAuditor().audit(resolve(request, Audit.builder()
                 .type("HTTP.REQUEST")
+                .isp(ipData.getIsp())
                 .extraData(objectNode)
+                .location(ipData.getLocation())
                 .action(httpServletRequest.getMethod())
                 .source(httpServletRequest.getRequestURI())
                 .ipAddress(httpServletRequest.getRemoteAddr())
-                .location(getLocation(httpServletRequest.getRemoteAddr()))
                 .device(Device.build(httpServletRequest.getHeader("User-Agent")))
                 .auditable(beforeAuditable(objectMapper.convertValue(body, ObjectNode.class))).build()));
         return body;
@@ -85,13 +99,15 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
             ObjectNode objectNode = objectMapper.createObjectNode();
             objectNode.set("headers", objectMapper.convertValue(resolveHeaders(httpServletRequest), JsonNode.class));
             objectNode.set("parameters", objectMapper.convertValue(httpServletRequest.getParameterMap(), JsonNode.class));
-            getAuditor().audit(resolve(Audit.builder()
+            IpData ipData = this.getIpData(httpServletRequest.getRemoteAddr());
+            getAuditor().audit(resolve(request, Audit.builder()
                     .type("HTTP.REQUEST")
+                    .isp(ipData.getIsp())
                     .extraData(objectNode)
+                    .location(ipData.getLocation())
                     .action(request.getMethod())
                     .source(request.getRequestURI())
                     .ipAddress(request.getRemoteAddr())
-                    .location(getLocation(request.getRemoteAddr()))
                     .device(Device.build(request.getHeader("User-Agent"))).build()));
         }
         return true;
@@ -125,7 +141,7 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
         Enumeration<String> headerNames = request.getHeaderNames();
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
-            headers.put(headerName, request.getHeader(headerName));
+            headers.put(headerName, String.valueOf(headerSanitizer(headerName, request.getHeader(headerName))));
         }
         return headers;
     }

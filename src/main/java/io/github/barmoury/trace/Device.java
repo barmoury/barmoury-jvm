@@ -41,7 +41,8 @@ public class Device implements Serializable {
         return device;
     }
 
-    public static class DeviceConverter extends ObjectConverter<Device> {
+    @jakarta.persistence.Converter
+    public static class Converter extends ObjectConverter<Device> {
 
         @SneakyThrows
         @Override
