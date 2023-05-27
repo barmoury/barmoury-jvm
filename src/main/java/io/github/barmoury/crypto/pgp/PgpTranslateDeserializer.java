@@ -43,12 +43,12 @@ public class PgpTranslateDeserializer<T extends PgpTranslate> extends JsonDeseri
     @SuppressWarnings("unchecked")
     public T deserialize(JsonParser jsonParser, DeserializationContext deserializationContext)
             throws IOException, JacksonException {
-        String namingStrategy = PgpConfig.getNamingStrategy();
+        String namingStrategy = PgpUtil.getNamingStrategy();
         Class<T> tClass = (Class<T>) type.getRawClass();
         JsonNode jsonNode = jsonParser.getCodec().readTree(jsonParser);
         if (FieldUtil.isSubclassOf(tClass, PgpTranslate.class) && jsonNode.isTextual()) {
-            jsonNode = PgpConfig.getObjectMapper()
-                    .readTree(PgpConfig.decodeEncryptedString(jsonNode.asText()));
+            jsonNode = PgpUtil.getObjectMapper()
+                    .readTree(PgpUtil.decodeEncryptedString(jsonNode.asText()));
         }
         T body = tClass.getConstructor().newInstance();
         List<Field> fields = FieldUtil.getAllFields(tClass);
@@ -72,7 +72,7 @@ public class PgpTranslateDeserializer<T extends PgpTranslate> extends JsonDeseri
                 else if (FieldUtil.objectsHasAnyType(field.getType(), String.class))
                 { field.set(body, value.asText()); }
                 else if (FieldUtil.isSubclassOf(field.getType(), PgpTranslate.class))
-                { field.set(body, PgpConfig.getObjectMapper().readValue(PgpConfig.decodeEncryptedString(value.asText()),
+                { field.set(body, PgpUtil.getObjectMapper().readValue(PgpUtil.decodeEncryptedString(value.asText()),
                         field.getType()));  }
                 else
                 { field.set(body, jsonParser.getCodec().treeToValue(value, field.getType())); }
