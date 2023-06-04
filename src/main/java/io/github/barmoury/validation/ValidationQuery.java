@@ -108,12 +108,12 @@ public @interface ValidationQuery {
                 countQuery.setParameter(fieldValue.getKey(), fieldValue.getValue());
             }
             int countValue = ((Number) countQuery.getSingleResult()).intValue();
-            if (countValue == 0 && (constraintValidatorContext instanceof ConstraintValidatorContextImpl)) {
+            boolean failed = this.checkIsZero == (countValue == 0);
+            if (failed && (constraintValidatorContext instanceof ConstraintValidatorContextImpl)) {
                     ((ConstraintValidatorContextImpl) constraintValidatorContext)
                             .addMessageParameter(Constants.VALUE, String.valueOf(o));
             }
-            if (this.checkIsZero) return countValue == 0;
-            return countValue != 0;
+            return failed;
         }
     }
 

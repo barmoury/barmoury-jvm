@@ -3,6 +3,7 @@ package io.github.barmoury.api.config;
 import io.github.barmoury.api.exception.*;
 import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
@@ -295,6 +296,15 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(ExpiredJwtException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("The authorization token has expired");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(MalformedJwtException.class)
+    public Object handleException(MalformedJwtException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("The authorization token is malformed");
         return processResponse(ex, errors);
     }
 

@@ -18,6 +18,10 @@ import java.util.Optional;
 public interface BarmourySessionRepository<T extends Session<?>>
         extends JpaRepository<T, Long>, PagingAndSortingRepository<T, Long>  {
 
+    Optional<T> findBySessionToken(String sessionToken);
+
+    Optional<T> findBySessionTokenAndStatus(String sessionToken, String status);
+
     Page<T> findAllBySessionIdAndStatus(String sessionId, String status, Pageable pageable);
 
     Optional<T> findByIdAndSessionIdAndStatus(long id, String sessionId, String status);

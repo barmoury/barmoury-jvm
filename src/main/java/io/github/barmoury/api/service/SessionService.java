@@ -23,6 +23,16 @@ public abstract class SessionService<T extends Session<?>> {
                 .findAllBySessionIdAndStatus(sessionId, "ACTIVE", pageable);
     }
 
+    public Optional<T> getSession(String sessionToken) {
+        return getBarmourySessionRepository()
+                .findBySessionToken(sessionToken);
+    }
+
+    public Optional<T> getSession(String sessionToken, String status) {
+        return getBarmourySessionRepository()
+                .findBySessionTokenAndStatus(sessionToken, status);
+    }
+
     public Optional<T> getSelfSession(long id, String sessionId) {
         return getBarmourySessionRepository()
                 .findByIdAndSessionIdAndStatus(id, sessionId, "ACTIVE");
