@@ -75,7 +75,7 @@ public @interface ValidationQuery {
                 String clause = this.orClauses[index];
                 queryString.append(clause);
                 while (clause.contains(":")) {
-                    int endIndex = clause.indexOf("\\s");
+                    int endIndex = clause.indexOf("\\s+");
                     if (endIndex == -1) endIndex = clause.length();
                     String fieldName = clause.substring(clause.indexOf(":")+1, endIndex);
                     clause = clause.substring(clause.indexOf(":")+1).trim();
@@ -90,11 +90,12 @@ public @interface ValidationQuery {
                 String clause = this.andClauses[index].trim();
                 queryString.append(String.format(clause, o));
                 while (clause.contains(":")) {
-                    int endIndex = clause.indexOf("\\s");
+                    int endIndex = clause.indexOf("\\s+");
                     if (endIndex == -1) endIndex = clause.length();
                     String fieldName = clause.substring(clause.indexOf(":")+1, endIndex);
                     clause = clause.substring(clause.indexOf(":")+1).trim();
-                    fieldValues.putIfAbsent(fieldName, FieldUtil.getFieldValue(o, fieldName));
+                    Object value = fieldName.equals(Constants.SELF) ? o : FieldUtil.getFieldValue(o, fieldName);
+                    fieldValues.putIfAbsent(fieldName, value);
                 }
                 if (index < this.andClauses.length-1) {
                     queryString.append(" AND ");
@@ -103,17 +104,18 @@ public @interface ValidationQuery {
             queryString.append(" )");
             String queryStringValue = queryString.toString();
             Query countQuery = entityManager.createNativeQuery(queryStringValue);
-            if (queryStringValue.contains(Constants.SELF)) countQuery.setParameter(Constants.VALUE, o);
             for (Map.Entry<String, Object> fieldValue : fieldValues.entrySet()) {
-                countQuery.setParameter(fieldValue.getKey(), fieldValue.getValue());
+                if (queryStringValue.contains(":" + fieldValue.getKey())) {
+                    countQuery.setParameter(fieldValue.getKey(), fieldValue.getValue());
+                }
             }
             int countValue = ((Number) countQuery.getSingleResult()).intValue();
-            boolean failed = this.checkIsZero == (countValue == 0);
-            if (failed && (constraintValidatorContext instanceof ConstraintValidatorContextImpl)) {
+            boolean passed = this.checkIsZero == (countValue == 0);
+            if (!passed && (constraintValidatorContext instanceof ConstraintValidatorContextImpl)) {
                     ((ConstraintValidatorContextImpl) constraintValidatorContext)
                             .addMessageParameter(Constants.VALUE, String.valueOf(o));
             }
-            return failed;
+            return passed;
         }
     }
 

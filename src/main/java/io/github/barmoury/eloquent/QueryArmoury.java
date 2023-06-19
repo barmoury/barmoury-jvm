@@ -37,7 +37,6 @@ import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-// TODO, convert true to 1 and false to 0 on query, if specified in query param
 // TODO accept query class for custom query
 public class QueryArmoury {
 

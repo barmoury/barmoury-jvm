@@ -75,16 +75,17 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
         objectNode.set("headers", objectMapper.convertValue(resolveHeaders(httpServletRequest), JsonNode.class));
         objectNode.set("parameters", objectMapper.convertValue(httpServletRequest.getParameterMap(), JsonNode.class));
         IpData ipData = this.getIpData(httpServletRequest.getRemoteAddr());
+        Object auditableNode = objectMapper.convertValue(body, Object.class);
         getAuditor().audit(resolve(request, Audit.builder()
                 .type("HTTP.REQUEST")
                 .isp(ipData.getIsp())
                 .extraData(objectNode)
                 .location(ipData.getLocation())
                 .action(httpServletRequest.getMethod())
+                .auditable(beforeAuditable(auditableNode))
                 .source(httpServletRequest.getRequestURI())
                 .ipAddress(httpServletRequest.getRemoteAddr())
-                .device(Device.build(httpServletRequest.getHeader("User-Agent")))
-                .auditable(beforeAuditable(objectMapper.convertValue(body, ObjectNode.class))).build()));
+                .device(Device.build(httpServletRequest.getHeader("User-Agent"))).build()));
         return body;
     }
 

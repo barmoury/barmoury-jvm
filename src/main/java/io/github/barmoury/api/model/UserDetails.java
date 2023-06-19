@@ -2,12 +2,14 @@ package io.github.barmoury.api.model;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
 @Getter
 public class UserDetails<T> implements org.springframework.security.core.userdetails.UserDetails {
@@ -73,6 +75,23 @@ public class UserDetails<T> implements org.springframework.security.core.userdet
     @Override
     public boolean isEnabled() {
         return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> UserDetails<T> fromPrincipal(Object principal) {
+        if (principal instanceof UserDetails userDetails) {
+            return (UserDetails<T>) userDetails;
+        }
+        return null;
+    }
+
+    public static <T> UserDetails<T> fromAuthentication(Authentication authentication) {
+        return fromPrincipal(Objects.requireNonNull(authentication).getPrincipal());
+    }
+
+    public static <T> T getUserDetailsDataFromAuthentication(Authentication authentication) {
+        UserDetails<T> userDetails = fromAuthentication(authentication);
+        return userDetails.getData();
     }
 
 }

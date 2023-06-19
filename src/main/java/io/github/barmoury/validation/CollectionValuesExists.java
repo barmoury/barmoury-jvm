@@ -14,11 +14,11 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.util.List;
+import java.util.Collection;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
-@Constraint(validatedBy = CollectionValuesExists.ListValuesExistsValidator.class)
+@Constraint(validatedBy = CollectionValuesExists.CollectionValuesExistsValidator.class)
 public @interface CollectionValuesExists {
 
     String message();
@@ -28,7 +28,7 @@ public @interface CollectionValuesExists {
     String whereClause() default "";
     String column();
 
-    class ListValuesExistsValidator implements ConstraintValidator<CollectionValuesExists, Object> {
+    class CollectionValuesExistsValidator implements ConstraintValidator<CollectionValuesExists, Object> {
 
         String table;
         String column;
@@ -51,10 +51,10 @@ public @interface CollectionValuesExists {
         public boolean isValid(Object o, ConstraintValidatorContext constraintValidatorContext) {
             if (o == null) {
                 ((ConstraintValidatorContextImpl) constraintValidatorContext)
-                        .addMessageParameter(Constants.VALUE, "none");
+                        .addMessageParameter(Constants.VALUE, "(null)");
                 return false;
             }
-            List<?> values = (List<?>) o;
+            Collection<?> values = (Collection<?>) o;
             for (Object value : values) {
                 String queryString = String.format("SELECT count(*) FROM %s WHERE %s = :self %s", table, column,
                         (whereClause.isBlank() ? "" : " AND " + whereClause));

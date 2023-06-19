@@ -112,8 +112,9 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
         String method = request.getMethod();
         AntPathMatcher matcher = new AntPathMatcher();
         String route = request.getRequestURI().replaceAll(request.getContextPath(), "");
-        List<String> paths = openUrlMatchers.getOrDefault("ANY", new ArrayList<>());
+        List<String> paths = new ArrayList<>();
         paths.addAll(openUrlMatchers.getOrDefault(method, new ArrayList<>()));
+        paths.addAll(openUrlMatchers.getOrDefault("ANY", new ArrayList<>()));
         for (String path : paths) {
             if (matcher.match(path, route)) return true;
         }

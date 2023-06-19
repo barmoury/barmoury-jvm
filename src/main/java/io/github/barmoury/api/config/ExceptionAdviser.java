@@ -34,6 +34,7 @@ import java.nio.file.AccessDeniedException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
 
@@ -191,8 +192,17 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
 
     @ResponseBody
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    @ExceptionHandler(EntityNotFoundException.class)
+    @ExceptionHandler({EntityNotFoundException.class})
     public Object handleException(EntityNotFoundException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ExceptionHandler({NoSuchElementException.class})
+    public Object handleException(NoSuchElementException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add(ex.getMessage());
         return processResponse(ex, errors);

@@ -3,6 +3,7 @@ package io.github.barmoury.api.controller;
 import io.github.barmoury.api.ValidationGroups;
 import io.github.barmoury.api.exception.ConstraintViolationException;
 import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
+import io.github.barmoury.api.model.ApiResponse;
 import io.github.barmoury.api.model.Model;
 import io.github.barmoury.api.model.UserDetails;
 import io.github.barmoury.audit.Auditor;
@@ -47,14 +48,17 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     static final String ACCESS_DENIED = "Access denied. You do not have the required role to access this endpoint";
 
     public void preResponse(T1 entity) {}
-    public void preQuery(HttpServletRequest request, Authentication authentication) {}
+    public HttpServletRequest preQuery(HttpServletRequest request, Authentication authentication) { return request; }
     public void preCreate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postCreate(HttpServletRequest request, Authentication authentication, T1 entity) {}
     public void preUpdate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postUpdate(HttpServletRequest request, Authentication authentication, T1 entity) {}
     public void preDelete(HttpServletRequest request, Authentication authentication, T1 entity, long id) {}
     public void postDelete(HttpServletRequest request, Authentication authentication, T1 entity) {}
-    public abstract <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message);
+
+    public <T> ResponseEntity<ApiResponse<T>> processResponse(HttpStatus httpStatus, T data, String message) {
+        return ApiResponse.build(httpStatus, data, message);
+    }
 
     public void setup(Class<T1> entityClass, JpaRepository<T1, Long> repository) {
         this.repository = repository;
@@ -76,7 +80,6 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     }
 
     @SuppressWarnings("unchecked")
-    @ModelAttribute("injectUpdateFieldId")
     public T2 injectUpdateFieldId(HttpServletRequest httpServletRequest,
                                                T2 resourceRequest) {
         if (!(httpServletRequest.getMethod().equals(RequestMethod.POST.name())
@@ -111,7 +114,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        preQuery(request, authentication);
+        request = preQuery(request, authentication);
         return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
@@ -124,7 +127,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        preQuery(request, authentication);
+        request = preQuery(request, authentication);
         Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass);
         resources.forEach(this::preResponse);
         return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
@@ -211,7 +214,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     @RequestMapping(value = "/{id}", method = RequestMethod.PATCH, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> update(HttpServletRequest httpServletRequest, Authentication authentication,
                                     @PathVariable long id,
-                                    @ModelAttribute("injectUpdateFieldId") @RequestBody T2 request) {
+                                    @RequestBody T2 request) {
 
         if (shouldNotHonourMethod(RouteMethod.UPDATE)) {
             throw new RouteMethodNotSupportedException("The PATCH '**/{id}' route is not supported for this resource");
@@ -220,12 +223,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        T1 resource = queryArmoury.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
         UserDetails<?> userDetails = null;
         if (authentication != null && authentication.getPrincipal() != null && authentication.getPrincipal() instanceof UserDetails secondUserDetails) {
             userDetails = secondUserDetails;
         }
-        resource.resolve(request, queryArmoury, userDetails);
+        injectUpdateFieldId(httpServletRequest, request);
+        T1 resource = queryArmoury.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
                 .constraintValidatorPayload((resource).getId())
@@ -235,6 +238,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (!errors.isEmpty()) {
             throw new ConstraintViolationException(request.getClass(), errors);
         }
+        resource.resolve(request, queryArmoury, userDetails);
         this.preUpdate(httpServletRequest, authentication, resource, request);
         String msg = validateBeforeCommit(resource);
         if (msg != null) throw new IllegalArgumentException(msg);

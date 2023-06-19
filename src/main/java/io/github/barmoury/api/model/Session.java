@@ -1,6 +1,7 @@
 package io.github.barmoury.api.model;
 
 import io.github.barmoury.converter.ObjectConverterImpl;
+import io.github.barmoury.copier.CopyProperty;
 import io.github.barmoury.eloquent.RequestParamFilter;
 import io.github.barmoury.eloquent.StatQuery;
 import io.github.barmoury.trace.Device;
@@ -79,5 +80,9 @@ public class Session<T> extends Model {
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE, columnObjectFieldsIsSnakeCase = false)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE, columnObjectFieldsIsSnakeCase = false)
     Object extraData;
+
+    @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
+    Date deletedAt = new Date();
 
 }
