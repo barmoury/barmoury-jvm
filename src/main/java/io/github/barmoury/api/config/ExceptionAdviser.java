@@ -209,6 +209,14 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     }
 
     @ResponseBody
+    @ResponseStatus(HttpStatus.PRECONDITION_FAILED)
+    @ExceptionHandler({PreConditionException.class})
+    public Object handleException(PreConditionException ex) {
+        List<Object> errors = new ArrayList<>(); errors.add(ex.getMessage());
+        return this.processResponse(ex, errors);
+    }
+
+    @ResponseBody
     @ResponseStatus(HttpStatus.FORBIDDEN)
     @ExceptionHandler(UnsupportedOperationException.class)
     public Object handleException(UnsupportedOperationException ex) {
