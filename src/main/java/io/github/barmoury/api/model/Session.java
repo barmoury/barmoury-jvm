@@ -54,7 +54,9 @@ public class Session<T> extends Model {
     @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     String ipAddress;
 
+    @StatQuery.OccurrenceQuery
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @StatQuery.ColumnQuery(name = "total_active", sqlFunction = "COUNT", whereClause = "%s = 'ACTIVE'")
     @StatQuery.ColumnQuery(name = "total_inactive", sqlFunction = "COUNT", whereClause = "%s = 'INACTIVE'")
     String status = "ACTIVE";
@@ -83,6 +85,6 @@ public class Session<T> extends Model {
 
     @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
     @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
-    Date deletedAt = new Date();
+    Date deletedAt;
 
 }

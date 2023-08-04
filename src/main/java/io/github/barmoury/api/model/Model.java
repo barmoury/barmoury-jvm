@@ -10,14 +10,17 @@ import lombok.Data;
 import java.util.Date;
 
 import io.github.barmoury.copier.CopyProperty;
+import org.hibernate.annotations.GenericGenerator;
 
 @Data
 @MappedSuperclass
 public class Model {
 
+    @Id
     @StatQuery.PercentageChangeQuery
-    @GeneratedValue(strategy = GenerationType.IDENTITY) @Id
-    long id;
+    @GeneratedValue(generator = "barmoury_id")
+    @GenericGenerator(name = "barmoury_id", strategy = "io.github.barmoury.api.generator.BarmouryIdGenerator")
+    Object id;
 
     @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
     @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
@@ -40,7 +43,7 @@ public class Model {
     }
 
     public static class Request {
-        public long updateEntityId;
+        public Object updateEntityId;
     }
 
 }

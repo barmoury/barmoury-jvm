@@ -29,6 +29,11 @@ public interface BarmourySessionRepository<T extends Session<?>>
     Optional<T> findBySessionTokenAndLastAuthTokenAndStatus(String sessionToken, String lastAuthToken, String status);
 
     @Modifying
+    @Query(value = "UPDATE sessions SET status = 'EXPIRED' WHERE status = 'ACTIVE' AND expiration_date <= NOW()",
+            nativeQuery = true)
+    void updatedExpiredSessions();
+
+    @Modifying
     @Query(value = "UPDATE sessions SET status = 'INACTIVE' WHERE id = :id AND status = 'ACTIVE'",
             nativeQuery = true)
     void deleteSelfSession(@Param("id") long id);

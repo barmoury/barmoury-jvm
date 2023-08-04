@@ -4,6 +4,7 @@ import io.github.barmoury.copier.CopierException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Table;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -173,6 +174,8 @@ public class FieldUtil {
     public static String getTableName(Class<?> clazz) {
         Entity entity = clazz.getAnnotation(Entity.class);
         if (entity != null) return entity.name();
+        Table table = clazz.getAnnotation(Table.class);
+        if (table != null) return table.name();
         return null;
     }
 

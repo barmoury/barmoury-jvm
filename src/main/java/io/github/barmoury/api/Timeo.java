@@ -7,7 +7,7 @@ import java.util.Date;
 public class Timeo {
 
     public static void resolve(Model model) {
-        if (model.getId() == 0) { resolveCreated(model); }
+        if (model.getId() == null) { resolveCreated(model); }
         else { resolveUpdated(model); }
     }
 

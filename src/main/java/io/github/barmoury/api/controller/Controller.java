@@ -1,5 +1,6 @@
 package io.github.barmoury.api.controller;
 
+import io.github.barmoury.api.MutableHttpServletRequest;
 import io.github.barmoury.api.ValidationGroups;
 import io.github.barmoury.api.exception.ConstraintViolationException;
 import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
@@ -16,6 +17,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.NotEmpty;
+import lombok.Getter;
 import org.hibernate.validator.HibernateValidatorFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -41,19 +43,26 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     String fineName;
     Class<T1> entityClass;
     JpaRepository<T1, Long> repository;
-    @Autowired QueryArmoury queryArmoury;
     @Autowired EntityManager entityManager;
+    @Autowired @Getter QueryArmoury queryArmoury;
     @Autowired LocalValidatorFactoryBean localValidatorFactoryBean;
-    static final String NO_RESOURCE_FORMAT_STRING = "No %s found with the specified id";
+    public static final String NO_RESOURCE_FORMAT_STRING = "No %s found with the specified id";
     static final String ACCESS_DENIED = "Access denied. You do not have the required role to access this endpoint";
 
     public void preResponse(T1 entity) {}
-    public HttpServletRequest preQuery(HttpServletRequest request, Authentication authentication) { return request; }
+    public boolean resolveSubEntities() {
+        return true;
+    }
+    public boolean skipRecursiveSubEntities() {
+        return true;
+    }
+    public void postGetResourceById(HttpServletRequest request, Authentication authentication, T1 entity) {}
+    public HttpServletRequest preQuery(MutableHttpServletRequest request, Authentication authentication) { return request; }
     public void preCreate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postCreate(HttpServletRequest request, Authentication authentication, T1 entity) {}
     public void preUpdate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postUpdate(HttpServletRequest request, Authentication authentication, T1 entity) {}
-    public void preDelete(HttpServletRequest request, Authentication authentication, T1 entity, long id) {}
+    public void preDelete(HttpServletRequest request, Authentication authentication, T1 entity, Object id) {}
     public void postDelete(HttpServletRequest request, Authentication authentication, T1 entity) {}
 
     public <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message) {
@@ -79,6 +88,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         return new String[0];
     }
 
+    public T1 getResourceById(Object id) {
+        return queryArmoury
+                .getResourceById(repository, Long.parseLong(id.toString()),
+                        String.format(NO_RESOURCE_FORMAT_STRING, fineName));
+    }
+
     @SuppressWarnings("unchecked")
     public T2 injectUpdateFieldId(HttpServletRequest httpServletRequest,
                                                T2 resourceRequest) {
@@ -89,8 +104,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         }
         Map<String, Object> pathParameters = (Map<String, Object>) httpServletRequest
                 .getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
-        if (pathParameters.containsKey("id")) resourceRequest.updateEntityId = Long.
-                parseLong(pathParameters.get("id").toString());
+        if (pathParameters.containsKey("id")) resourceRequest.updateEntityId = pathParameters.get("id");
         return resourceRequest;
     }
 
@@ -114,7 +128,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        request = preQuery(request, authentication);
+        request = preQuery(new MutableHttpServletRequest(request), authentication);
         return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
@@ -127,8 +141,9 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        request = preQuery(request, authentication);
-        Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass);
+        request = preQuery(new MutableHttpServletRequest(request), authentication);
+        Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass, resolveSubEntities(),
+                skipRecursiveSubEntities());
         resources.forEach(this::preResponse);
         return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
                 this.fineName));
@@ -163,7 +178,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public ResponseEntity<?> storeMultiple(HttpServletRequest httpServletRequest, Authentication authentication,
                                    @Validated(ValidationGroups.Create.class)
                                    @Valid @NotEmpty(message = "The request list cannot be empty") @RequestBody
-                                   List<@Valid T2> entityRequests)
+                                   List<T2> entityRequests)
             throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
 
         if (shouldNotHonourMethod(RouteMethod.STORE_MULTIPLE)) {
@@ -173,31 +188,39 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(httpServletRequest::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        List<Object> entities = new ArrayList<>();
+        List<T1> resources = new ArrayList<>();
+        List<Object> results = new ArrayList<>();
         for (T2 entityRequest : entityRequests) {
+            Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
+                    .usingContext().getValidator();
+            Set<? extends ConstraintViolation<?>> errors = validator
+                    .validate(entityRequest, ValidationGroups.Update.class);
+            if (!errors.isEmpty()) {
+                throw new ConstraintViolationException(entityRequest.getClass(), errors);
+            }
             T1 resource = resolveRequestPayload(authentication, entityRequest);
             this.preCreate(httpServletRequest, authentication, resource, entityRequest);
             String msg = validateBeforeCommit(resource);
-            if (msg != null) {
-                entities.add(resource);
-                continue;
-            }
+            if (msg != null) throw new IllegalArgumentException(msg);
+            resources.add(resource);
+        }
+        for (T1 resource : resources) {
             try {
                 resource = repository.saveAndFlush(resource);
             } catch (Exception exception) {
-                entities.add(exception.getMessage());
+                results.add(exception.getMessage());
                 continue;
             }
             this.postCreate(httpServletRequest, authentication, resource);
             preResponse(resource);
-            entities.add(resource);
+            results.add(resource);
         }
-        return processResponse(HttpStatus.CREATED, entities,
-                String.format("the %s(s) are created successfully", this.fineName));
+        return processResponse(HttpStatus.CREATED, results,
+                String.format("The %s(s) are created successfully", this.fineName));
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> show(HttpServletRequest request, @PathVariable long id) {
+    public ResponseEntity<?> show(HttpServletRequest request, Authentication authentication, @PathVariable Object id) {
         if (shouldNotHonourMethod(RouteMethod.SHOW)) {
             throw new RouteMethodNotSupportedException("The GET '**/{id}' route is not supported for this resource");
         }
@@ -205,15 +228,15 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        T1 resource = queryArmoury.getResourceById(repository, id,
-                String.format(NO_RESOURCE_FORMAT_STRING, fineName));
+        T1 resource = getResourceById(id);
+        postGetResourceById(request, authentication, resource);
         preResponse(resource);
         return processResponse(HttpStatus.OK, resource, String.format("%s fetch successfully", this.fineName));
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.PATCH, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> update(HttpServletRequest httpServletRequest, Authentication authentication,
-                                    @PathVariable long id,
+                                    @PathVariable Object id,
                                     @RequestBody T2 request) {
 
         if (shouldNotHonourMethod(RouteMethod.UPDATE)) {
@@ -228,10 +251,11 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
             userDetails = secondUserDetails;
         }
         injectUpdateFieldId(httpServletRequest, request);
-        T1 resource = queryArmoury.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
+        T1 resource = getResourceById(id);
+        postGetResourceById(httpServletRequest, authentication, resource);
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
-                .constraintValidatorPayload((resource).getId())
+                .constraintValidatorPayload(resource.getId())
                 .getValidator();
         Set<? extends ConstraintViolation<?>> errors = validator
                 .validate(request, ValidationGroups.Update.class);
@@ -249,7 +273,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> destroy(HttpServletRequest request, Authentication authentication, @PathVariable long id) {
+    public ResponseEntity<?> destroy(HttpServletRequest request, Authentication authentication, @PathVariable Object id) {
 
         if (shouldNotHonourMethod(RouteMethod.DESTROY)) {
             throw new RouteMethodNotSupportedException("The DELETE '**/{id}' route is not supported for this resource");
@@ -258,11 +282,34 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        T1 resource = queryArmoury.getResourceById(repository, id, String.format(NO_RESOURCE_FORMAT_STRING, fineName));
+        T1 resource = getResourceById(id);
+        postGetResourceById(request, authentication, resource);
         this.preDelete(request, authentication, resource, id);
         repository.delete(resource);
         this.postDelete(request, authentication, resource);
         preResponse(resource);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @RequestMapping(value = "/multiple", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> destroyMultiple(HttpServletRequest request, Authentication authentication,
+                                             @RequestBody List<Object> ids) {
+
+        if (shouldNotHonourMethod(RouteMethod.DESTROY_MULTIPLE)) {
+            throw new RouteMethodNotSupportedException("The DELETE '**/{id}' route is not supported for this resource");
+        }
+        String[] roles = getRouteMethodRoles(RouteMethod.DESTROY_MULTIPLE);
+        if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
+            throw new AccessDeniedException(ACCESS_DENIED);
+        }
+        List<T1> resources = ids.stream().map(this::getResourceById).toList();
+        for (T1 resource : resources) {
+            postGetResourceById(request, authentication, resource);
+            this.preDelete(request, authentication, resource, resource.getId());
+            repository.delete(resource);
+            this.postDelete(request, authentication, resource);
+            preResponse(resource);
+        }
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
@@ -273,7 +320,8 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         STORE,
         UPDATE,
         DESTROY,
-        STORE_MULTIPLE
+        STORE_MULTIPLE,
+        DESTROY_MULTIPLE
     }
 
 }

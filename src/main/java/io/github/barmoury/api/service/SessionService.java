@@ -19,6 +19,7 @@ public abstract class SessionService<T extends Session<?>> {
     public abstract BarmourySessionRepository<T> getBarmourySessionRepository();
 
     public Page<T> getActiveSessions(String sessionId, Pageable pageable) {
+        getBarmourySessionRepository().updatedExpiredSessions();
         return getBarmourySessionRepository()
                 .findAllBySessionIdAndStatus(sessionId, "ACTIVE", pageable);
     }
