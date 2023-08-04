@@ -44,7 +44,7 @@ public @interface CollectionValuesShouldMatchAny {
                     }
                 }
             }
-            ((ConstraintValidatorContextImpl) constraintValidatorContext).addMessageParameter("value", "none");
+            ((ConstraintValidatorContextImpl) constraintValidatorContext).addMessageParameter("value", "(null)");
             return false;
         }
     }

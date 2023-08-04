@@ -1,6 +1,7 @@
 package io.github.barmoury.api.model;
 
 import io.github.barmoury.converter.ObjectConverterImpl;
+import io.github.barmoury.copier.CopyProperty;
 import io.github.barmoury.eloquent.RequestParamFilter;
 import io.github.barmoury.eloquent.StatQuery;
 import io.github.barmoury.trace.Device;
@@ -53,7 +54,9 @@ public class Session<T> extends Model {
     @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     String ipAddress;
 
+    @StatQuery.OccurrenceQuery
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE)
+    @StatQuery.OccurrenceQuery(type = StatQuery.OccurrenceQuery.Type.PERCENTAGE)
     @StatQuery.ColumnQuery(name = "total_active", sqlFunction = "COUNT", whereClause = "%s = 'ACTIVE'")
     @StatQuery.ColumnQuery(name = "total_inactive", sqlFunction = "COUNT", whereClause = "%s = 'INACTIVE'")
     String status = "ACTIVE";
@@ -79,5 +82,9 @@ public class Session<T> extends Model {
     @RequestParamFilter(operator = RequestParamFilter.Operator.LIKE, columnObjectFieldsIsSnakeCase = false)
     @RequestParamFilter(operator = RequestParamFilter.Operator.OBJECT_LIKE, columnObjectFieldsIsSnakeCase = false)
     Object extraData;
+
+    @CopyProperty(ignore = true) @Temporal(TemporalType.TIMESTAMP)
+    @RequestParamFilter(operator = RequestParamFilter.Operator.RANGE)
+    Date deletedAt;
 
 }

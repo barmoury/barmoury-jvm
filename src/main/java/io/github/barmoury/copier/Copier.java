@@ -18,9 +18,12 @@ public class Copier {
             try {
                 Object[][] fields = new Object[sources.length][2];
                 for (int counter = 0; counter < fields.length; ++counter) {
-                    Field subField = sources[counter].getClass().getDeclaredField(fieldName);
                     fields[counter][0] = sources[counter];
-                    fields[counter][1] = subField;
+                    try {
+                        fields[counter][1] = sources[counter].getClass().getDeclaredField(fieldName);
+                    } catch (NoSuchFieldException ex) {
+                        fields[counter][1] = null;
+                    }
                 }
                 boolean fieldIsAccessible = Modifier.isStatic(field.getModifiers()) || field.canAccess(target);
                 if (!fieldIsAccessible) field.setAccessible(true);
@@ -47,10 +50,6 @@ public class Copier {
                     field.set(target, null);
                 }
                 if (!fieldIsAccessible) field.setAccessible(false);
-            } catch (NoSuchFieldException ex) {
-                // should not occur, tho can happen
-                // we need not throw exception, so
-                // we just skip the one not present
             } catch (IllegalAccessException ex) {
                 throw new CopierException(String.format("Could not get the value of the property '%s' from all the " +
                         "provided sources", fieldName));
@@ -66,6 +65,7 @@ public class Copier {
         for (int index = 0; index < fields.length; index++) {
             Object[] objects = fields[index];
             Object source = objects[0];
+            if (objects[1] == null) continue;
             Field field = (Field) objects[1];
             types[index] = field.getType();
             fieldIsAccessible[index] = Modifier.isStatic(field.getModifiers()) || field.canAccess(source);
@@ -75,7 +75,7 @@ public class Copier {
             if (!fieldIsAccessible[index]) field.setAccessible(false);
         }
         if (allValueIsNull) return null;
-        for (int index = 0;; index++) {
+        for (int index = 0; index < values.length; index++) {
             Object value = values[index];
             if (value != null && FieldUtil.objectsHasAnyType(types[index], int.class, Integer.class)) {
                 if (((Integer) value) >= 0 || index == values.length-1) return value;
@@ -95,6 +95,7 @@ public class Copier {
                 if (((Character) value) > 0 || index == values.length-1) return value;
             } else if (value != null) return value;
         }
+        return null;
     }
 
 }

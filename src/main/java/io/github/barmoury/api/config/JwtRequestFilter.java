@@ -1,13 +1,18 @@
 package io.github.barmoury.api.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.barmoury.api.model.ApiResponse;
 import io.github.barmoury.api.model.UserDetails;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -25,13 +30,39 @@ import java.util.Map;
 @Component
 public abstract class JwtRequestFilter extends OncePerRequestFilter {
 
+    @Autowired ObjectMapper objectMapper;
     Map<String, List<String>> openUrlMatchers = new HashMap<>();
 
-    public abstract JwtTokenUtil getJwtTokenUtil();
-    public abstract void processResponse(HttpServletResponse httpServletResponse, String message, int status) throws IOException;
+    @Deprecated
+    public JwtTokenUtil getJwtTokenUtil() {
+        return null;
+    }
+
+    public JwtTokenUtil getJwtTokenUtil(String key) {
+        return getJwtTokenUtil();
+    }
+
+    public String[] getTokenKeys() {
+        return new String[]{null};
+    }
+
+    public void processResponse(HttpServletResponse httpServletResponse, String message, int status) throws IOException {
+        httpServletResponse.setStatus(status);
+        httpServletResponse.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        List<Object> errors = new ArrayList<>(); errors.add(message);
+        objectMapper.writeValue(httpServletResponse.getWriter(), new ApiResponse<>(errors));
+    }
+
+    public boolean validate(HttpServletRequest httpServletRequest, String key, UserDetails<?> userDetails) {
+        return validate(httpServletRequest, userDetails);
+    }
 
     public boolean validate(HttpServletRequest httpServletRequest, UserDetails<?> userDetails) {
         return true;
+    }
+
+    public String getAuthoritiesPrefix(String key) {
+        return getAuthoritiesPrefix();
     }
 
     public String getAuthoritiesPrefix() {
@@ -49,36 +80,52 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
         }
 
         final String token = header.split(" ")[1].trim();
-        UserDetails<?> userDetails;
-        try {
-            userDetails = getJwtTokenUtil().validate(token);
-        } catch (ExpiredJwtException ex) {
-            processResponse(httpServletResponse, "The authorization token has expired", HttpServletResponse.SC_UNAUTHORIZED);
-            return;
-        } catch (SignatureException ex) {
-            processResponse(httpServletResponse, "Access denied. Suspicious request detected", HttpServletResponse.SC_UNAUTHORIZED);
-            return;
+        String[] tokenKeys = getTokenKeys();
+        for (int index = 0; index < tokenKeys.length; index++) {
+            String key = tokenKeys[index];
+            UserDetails<?> userDetails = null;
+            try {
+                userDetails = getJwtTokenUtil(key).validate(key, token);
+            } catch (ExpiredJwtException ex) {
+                processResponse(httpServletResponse, "The authorization token has expired", HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            } catch (MalformedJwtException ex) {
+                processResponse(httpServletResponse, "The authorization token is malformed", HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            } catch (SignatureException ex) {
+                if (index == tokenKeys.length - 1) {
+                    processResponse(httpServletResponse, "Access denied. Suspicious request detected", HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
+                }
+            } catch (Exception ex) {
+                processResponse(httpServletResponse, "The JWT authorization failed", HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+            if (userDetails == null) {
+                if (index == tokenKeys.length - 1) {
+                    processResponse(httpServletResponse, "Invalid Authorization token", HttpServletResponse.SC_UNAUTHORIZED);
+                    filterChain.doFilter(httpServletRequest, httpServletResponse);
+                    return;
+                }
+                continue;
+            }
+
+            userDetails.setAuthorityPrefix(getAuthoritiesPrefix(key));
+            if (!validate(httpServletRequest, key, userDetails)) {
+                processResponse(httpServletResponse, "User details validation failed", HttpServletResponse.SC_FORBIDDEN);
+                return;
+            }
+
+            UsernamePasswordAuthenticationToken
+                    authentication = new UsernamePasswordAuthenticationToken(
+                    userDetails, null,
+                    userDetails.getAuthorities());
+
+            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpServletRequest));
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            break;
         }
-        if (userDetails == null) {
-            processResponse(httpServletResponse, "Invalid Authorization token", HttpServletResponse.SC_UNAUTHORIZED);
-            filterChain.doFilter(httpServletRequest, httpServletResponse);
-            return;
-        }
-
-        userDetails.setAuthorityPrefix(getAuthoritiesPrefix());
-        if (!validate(httpServletRequest, userDetails)) {
-            processResponse(httpServletResponse, "User details validation failed", HttpServletResponse.SC_FORBIDDEN);
-            return;
-        }
-
-        UsernamePasswordAuthenticationToken
-                authentication = new UsernamePasswordAuthenticationToken(
-                userDetails, null,
-                userDetails.getAuthorities());
-
-        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpServletRequest));
-
-        SecurityContextHolder.getContext().setAuthentication(authentication);
         filterChain.doFilter(httpServletRequest, httpServletResponse);
     }
 
@@ -105,8 +152,9 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
         String method = request.getMethod();
         AntPathMatcher matcher = new AntPathMatcher();
         String route = request.getRequestURI().replaceAll(request.getContextPath(), "");
-        List<String> paths = openUrlMatchers.getOrDefault("ANY", new ArrayList<>());
+        List<String> paths = new ArrayList<>();
         paths.addAll(openUrlMatchers.getOrDefault(method, new ArrayList<>()));
+        paths.addAll(openUrlMatchers.getOrDefault("ANY", new ArrayList<>()));
         for (String path : paths) {
             if (matcher.match(path, route)) return true;
         }

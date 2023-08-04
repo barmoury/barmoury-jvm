@@ -45,10 +45,10 @@ public class PgpTranslateHttpMessageConverter extends AbstractHttpMessageConvert
     @SneakyThrows
     protected PgpTranslate readInternal(Class<? extends PgpTranslate> clazz, HttpInputMessage inputMessage)
             throws IOException, HttpMessageNotReadableException {
-        ObjectMapper objectMapper = PgpConfig.getObjectMapper();
+        ObjectMapper objectMapper = PgpUtil.getObjectMapper();
         PgpTranslate requestBody = objectMapper
-                .readValue(PgpConfig.decodeEncryptedString(new String(inputMessage.getBody()
-                        .readAllBytes(), PgpConfig.getCharset())), clazz);
+                .readValue(PgpUtil.decodeEncryptedString(new String(inputMessage.getBody()
+                        .readAllBytes(), PgpUtil.getCharset())), clazz);
         Valid valid = clazz.getAnnotation(Valid.class);
         Validated validated = clazz.getAnnotation(Validated.class);
         if (valid == null && validated == null) return requestBody;
@@ -66,7 +66,7 @@ public class PgpTranslateHttpMessageConverter extends AbstractHttpMessageConvert
     @Override
     protected void writeInternal(PgpTranslate t, HttpOutputMessage outputMessage)
             throws IOException, HttpMessageNotWritableException {
-        outputMessage.getBody().write(t.toEncryptedString().getBytes(PgpConfig.getCharset()));
+        outputMessage.getBody().write(t.toEncryptedString().getBytes(PgpUtil.getCharset()));
     }
 
 }

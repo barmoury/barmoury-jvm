@@ -3,6 +3,7 @@ package io.github.barmoury.api.config;
 import io.github.barmoury.api.exception.*;
 import io.github.barmoury.copier.CopierException;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,6 +34,7 @@ import java.nio.file.AccessDeniedException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
 
@@ -190,11 +192,28 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
 
     @ResponseBody
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    @ExceptionHandler(EntityNotFoundException.class)
+    @ExceptionHandler({EntityNotFoundException.class})
     public Object handleException(EntityNotFoundException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add(ex.getMessage());
         return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ExceptionHandler({NoSuchElementException.class})
+    public Object handleException(NoSuchElementException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.PRECONDITION_FAILED)
+    @ExceptionHandler({PreConditionException.class})
+    public Object handleException(PreConditionException ex) {
+        List<Object> errors = new ArrayList<>(); errors.add(ex.getMessage());
+        return this.processResponse(ex, errors);
     }
 
     @ResponseBody
@@ -295,6 +314,15 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(ExpiredJwtException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("The authorization token has expired");
+        return processResponse(ex, errors);
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(MalformedJwtException.class)
+    public Object handleException(MalformedJwtException ex) {
+        List<Object> errors = new ArrayList<>();
+        errors.add("The authorization token is malformed");
         return processResponse(ex, errors);
     }
 

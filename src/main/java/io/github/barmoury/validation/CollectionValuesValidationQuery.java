@@ -12,7 +12,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.util.List;
+import java.util.Collection;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
@@ -24,6 +24,7 @@ public @interface CollectionValuesValidationQuery {
     Class<?>[] groups() default {};
     String[] orClauses() default {};
     String[] andClauses() default {};
+    boolean checkIsZero() default false;
     Class<? extends Payload>[] payload() default {};
 
     class Validator implements ConstraintValidator<CollectionValuesValidationQuery, Object> {
@@ -42,16 +43,17 @@ public @interface CollectionValuesValidationQuery {
             this.validator.groups = constraintAnnotation.groups();
             this.validator.orClauses = constraintAnnotation.orClauses();
             this.validator.andClauses = constraintAnnotation.andClauses();
+            this.validator.checkIsZero = constraintAnnotation.checkIsZero();
         }
 
         @Override
         public boolean isValid(Object o, ConstraintValidatorContext constraintValidatorContext) {
             if (o == null) {
                 ((ConstraintValidatorContextImpl) constraintValidatorContext)
-                        .addMessageParameter("value", "none");
+                        .addMessageParameter("value", "(null)");
                 return false;
             }
-            List<?> values = (List<?>) o;
+            Collection<?> values = (Collection<?>) o;
             for (Object value : values) {
                 if (!validator.isValid(value, constraintValidatorContext)) {
                     return false;

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.barmoury.api.exception.ConstraintViolationException;
 import io.github.barmoury.api.exception.PgpConstraintViolationException;
 import io.github.barmoury.crypto.pgp.PgpRequestHandler;
+import io.github.barmoury.crypto.pgp.PgpUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolation;
@@ -35,9 +36,9 @@ public class PgpRequestBodyTranslator implements HandlerInterceptor {
             String payload = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
             if (payload.isBlank()) throw new IllegalArgumentException("the request body is empty, cannot" +
                     " continue with pgp translation");
-            ObjectMapper objectMapper = PgpConfig.getObjectMapper();
+            ObjectMapper objectMapper = PgpUtil.getObjectMapper();
             Object requestBody = objectMapper
-                    .readValue(PgpConfig.decodeEncryptedString(payload), pgpRequestHandler.value());
+                    .readValue(PgpUtil.decodeEncryptedString(payload), pgpRequestHandler.value());
             request.setAttribute(PgpConfig.REQUEST_MODEL_ATTRIBUTE, requestBody);
             Valid valid = requestBody.getClass().getAnnotation(Valid.class);
             Validated validated = requestBody.getClass().getAnnotation(Validated.class);

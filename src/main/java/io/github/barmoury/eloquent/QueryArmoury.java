@@ -37,7 +37,6 @@ import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-// TODO, convert true to 1 and false to 0 on query, if specified in query param
 // TODO accept query class for custom query
 public class QueryArmoury {
 
@@ -58,6 +57,10 @@ public class QueryArmoury {
         return sqlInterface.database();
     }
 
+    public Query createNativeQuery(String query) {
+        return entityManager.createNativeQuery(query);
+    }
+
     @SuppressWarnings("unchecked")
     public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
@@ -74,7 +77,8 @@ public class QueryArmoury {
         return entity;
     }
 
-    public <T> Page<T> pageQuery(HttpServletRequest request, Pageable pageable, Class<T> clazz) {
+    public <T> Page<T> pageQuery(HttpServletRequest request, Pageable pageable, Class<T> clazz,
+                                 boolean resolveSubEntities, boolean skipRecursiveSubEntities) {
         String tableName = FieldUtil.getTableName(clazz);
         Map<String, JoinColumn> joinTables = new HashMap<>();
         if (isSnakeCase) mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
@@ -89,9 +93,13 @@ public class QueryArmoury {
 
         NativeQueryImpl<T> nativeQuery = (NativeQueryImpl<T>) query;
         nativeQuery.setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
-        List<T> content = resolveEntityList(query.getResultList(), clazz, true);
+        List<T> content = resolveEntityList(query.getResultList(), clazz, resolveSubEntities, skipRecursiveSubEntities);
 
         return new PageImpl<>(content, pageable, totalElements);
+    }
+
+    public <T> Page<T> pageQuery(HttpServletRequest request, Pageable pageable, Class<T> clazz) {
+        return pageQuery(request, pageable, clazz, true, true);
     }
 
     public <T> JsonNode statWithQuery(HttpServletRequest request, Class<T> clazz) throws ParseException {
@@ -1137,15 +1145,17 @@ public class QueryArmoury {
     }
 
     public <T> List<T> resolveEntityList(List<Map<String, Object>> rows,
-                                                    Class<T> tClass,
-                                                    boolean resolveSubEntities) {
+                                         Class<T> tClass,
+                                         boolean resolveSubEntities,
+                                         boolean skipRecursiveSubEntities) {
 
         List<T> result = new ArrayList<>();
         Map<String, Object[]> joinColumnFields = resolveSubEntities ? FieldUtil.findJoinColumnFields(tClass) : null;
         for (Map<String, Object> row : rows) {
             // TODO this is not efficient, should fetch typed directly and not convert with mapper
-            result.add(mapper.convertValue(processSingleRow(row, joinColumnFields, tClass, resolveSubEntities),
-                    tClass));
+            result.add(mapper
+                    .convertValue(processSingleRow(row, joinColumnFields, tClass, resolveSubEntities,
+                                    skipRecursiveSubEntities ? new HashSet<>() : null), tClass));
         }
         return result;
     }
@@ -1154,7 +1164,8 @@ public class QueryArmoury {
     <T> Map<String, Object> processSingleRow(Map<String, Object> row,
                                              Map<String, Object[]> joinColumnFields,
                                              Class<T> tClass,
-                                             boolean resolveSubEntities) {
+                                             boolean resolveSubEntities,
+                                             Set<Class<?>> resolvedClasses) {
         Map<String, Object> nrow = new HashMap<>();
         for (String key : row.keySet()) {
             if (resolveSubEntities && joinColumnFields.containsKey(key)) {
@@ -1163,7 +1174,7 @@ public class QueryArmoury {
                 Class<?> tableClazz = (Class<?>) values[1];
                 JoinColumn joinColumn = (JoinColumn) values[2];
                 nrow.put(isSnakeCase ? FieldUtil.toSnakeCase(field.getName()) : FieldUtil.toCamelCase(field.getName()),
-                        resolveSubEntity(field, joinColumn, tableClazz, row.get(key)));
+                        resolveSubEntity(field, joinColumn, tableClazz, row.get(key), resolvedClasses));
             } else {
                 Object value = row.get(key);
                 Field field = FieldUtil.getDeclaredField(tClass, isSnakeCase ? FieldUtil.toCamelCase(key) : key);
@@ -1198,7 +1209,8 @@ public class QueryArmoury {
     Object resolveSubEntity(Field field,
                             JoinColumn joinColumn,
                             Class<?> tClass,
-                            Object value) {
+                            Object value,
+                            Set<Class<?>> resolvedClasses) {
         if (value == null) return null;
         if (field.getAnnotation(OneToMany.class) != null) {
             return new ArrayList<>();
@@ -1208,6 +1220,7 @@ public class QueryArmoury {
             Entity entity = tClass.getAnnotation(Entity.class);
             if (entity != null) tableName = entity.name();
         }
+        if (resolvedClasses != null && resolvedClasses.contains(tClass)) return null;
         String queryString = String.format("SELECT sub_entity.* FROM %s sub_entity WHERE %s = :value ",
                 tableName, joinColumn.referencedColumnName());
         MultiValuedMap<String, Object> requestFields = new ArrayListValuedHashMap<>();
@@ -1215,7 +1228,8 @@ public class QueryArmoury {
         requestFields.put("value", null); requestFields.put("value", value);
         Map<String, Object> entry = singleQueryResultAsMap(null, queryString, entityManager, requestFields);
         Map<String, Object[]> joinColumnFields = FieldUtil.findJoinColumnFields(tClass);
-        return processSingleRow(entry, joinColumnFields, tClass, true);
+        if (resolvedClasses != null) resolvedClasses.add(tClass);
+        return processSingleRow(entry, joinColumnFields, tClass, true, resolvedClasses);
     }
 
     <T>  Map<String, Object> singleQueryResultAsMap(Class<T> clazz,

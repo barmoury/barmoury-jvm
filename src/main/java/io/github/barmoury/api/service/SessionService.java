@@ -19,8 +19,19 @@ public abstract class SessionService<T extends Session<?>> {
     public abstract BarmourySessionRepository<T> getBarmourySessionRepository();
 
     public Page<T> getActiveSessions(String sessionId, Pageable pageable) {
+        getBarmourySessionRepository().updatedExpiredSessions();
         return getBarmourySessionRepository()
                 .findAllBySessionIdAndStatus(sessionId, "ACTIVE", pageable);
+    }
+
+    public Optional<T> getSession(String sessionToken) {
+        return getBarmourySessionRepository()
+                .findBySessionToken(sessionToken);
+    }
+
+    public Optional<T> getSession(String sessionToken, String status) {
+        return getBarmourySessionRepository()
+                .findBySessionTokenAndStatus(sessionToken, status);
     }
 
     public Optional<T> getSelfSession(long id, String sessionId) {

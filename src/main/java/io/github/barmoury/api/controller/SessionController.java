@@ -9,6 +9,7 @@ import io.github.barmoury.api.service.SessionService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -41,14 +42,16 @@ public abstract class SessionController<T extends Session<?>> extends Controller
     @Override
     @RequestMapping(value = "/{id}", method = RequestMethod.PATCH, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> update(HttpServletRequest httpServletRequest, Authentication authentication,
-                                    @PathVariable long id, @RequestBody Model.Request request) {
-        throw new UnsupportedOperationException("a session cannot be updated");
+                                    @PathVariable Object id, @RequestBody Model.Request request) {
+        throw new UnsupportedOperationException("A session cannot be updated");
     }
 
     @RequestMapping(value = "/self", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getSelfSessions(Authentication authentication, HttpServletRequest request, Pageable pageable) {
         UserDetails<?> userDetails = (UserDetails<?>) authentication.getPrincipal();
-        return processResponse(HttpStatus.OK, sessionService.getActiveSessions(userDetails.getId(), pageable),
+        Page<T> sessions = sessionService.getActiveSessions(userDetails.getId(), pageable);
+        sessions.forEach(this::preResponse);
+        return processResponse(HttpStatus.OK, sessions,
                 String.format("%s list fetched successfully", this.fineName));
     }
 
@@ -67,6 +70,7 @@ public abstract class SessionController<T extends Session<?>> extends Controller
         if (barmourySession.isEmpty()) {
             throw new EntityNotFoundException(String.format("no session found with the specified id '%d'", id));
         }
+        preResponse(barmourySession.get());
         return processResponse(HttpStatus.OK, barmourySession.get(),
                 String.format("%s fetched successfully", this.fineName));
     }

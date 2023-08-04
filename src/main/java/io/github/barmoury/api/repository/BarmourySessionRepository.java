@@ -18,11 +18,20 @@ import java.util.Optional;
 public interface BarmourySessionRepository<T extends Session<?>>
         extends JpaRepository<T, Long>, PagingAndSortingRepository<T, Long>  {
 
+    Optional<T> findBySessionToken(String sessionToken);
+
+    Optional<T> findBySessionTokenAndStatus(String sessionToken, String status);
+
     Page<T> findAllBySessionIdAndStatus(String sessionId, String status, Pageable pageable);
 
     Optional<T> findByIdAndSessionIdAndStatus(long id, String sessionId, String status);
 
     Optional<T> findBySessionTokenAndLastAuthTokenAndStatus(String sessionToken, String lastAuthToken, String status);
+
+    @Modifying
+    @Query(value = "UPDATE sessions SET status = 'EXPIRED' WHERE status = 'ACTIVE' AND expiration_date <= NOW()",
+            nativeQuery = true)
+    void updatedExpiredSessions();
 
     @Modifying
     @Query(value = "UPDATE sessions SET status = 'INACTIVE' WHERE id = :id AND status = 'ACTIVE'",

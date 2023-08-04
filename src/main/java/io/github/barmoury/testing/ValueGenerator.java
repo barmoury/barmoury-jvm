@@ -72,6 +72,36 @@ public class ValueGenerator {
         return generateRandomInteger(1, 3) > 1;
     }
 
+    public static String maskString(String value) {
+        return maskString(value, 0);
+    }
+
+    public static String maskStringPrefix(String value, int prefixLength) {
+        return maskString(value, prefixLength, 0);
+    }
+
+    public static String maskStringSuffix(String value, int suffixLength) {
+        return maskString(value, 0, suffixLength);
+    }
+
+    public static String maskString(String value, int prefixLength) {
+        return maskStringPrefix(value, prefixLength);
+    }
+
+    public static String maskStringReverse(String value, int suffixLength) {
+        return maskStringSuffix(value, suffixLength);
+    }
+
+    public static String maskString(String value, int prefixLength, int suffixLength) {
+        int valueLength = value.length();
+        suffixLength = valueLength-suffixLength;
+        int prefix = Math.min(prefixLength, valueLength-1);
+        int suffix = Math.max(suffixLength, 0);
+        return value.substring(0, prefix)
+                + "*".repeat(suffixLength-prefix)
+                + value.substring(suffix);
+    }
+
     public static <T> T populate(T obj) {
         return populate(obj, true);
     }
