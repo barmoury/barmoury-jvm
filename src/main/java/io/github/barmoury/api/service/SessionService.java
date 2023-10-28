@@ -34,6 +34,11 @@ public abstract class SessionService<T extends Session<?>> {
                 .findBySessionTokenAndStatus(sessionToken, status);
     }
 
+    public Optional<T> getSessionByLastAccessToken(String lastAccessToken, String status) {
+        return getBarmourySessionRepository()
+                .findByLastAuthTokenAndStatus(lastAccessToken, status);
+    }
+
     public Optional<T> getSelfSession(long id, String sessionId) {
         return getBarmourySessionRepository()
                 .findByIdAndSessionIdAndStatus(id, sessionId, "ACTIVE");

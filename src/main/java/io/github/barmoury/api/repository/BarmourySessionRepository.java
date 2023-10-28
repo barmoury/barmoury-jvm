@@ -22,6 +22,8 @@ public interface BarmourySessionRepository<T extends Session<?>>
 
     Optional<T> findBySessionTokenAndStatus(String sessionToken, String status);
 
+    Optional<T> findByLastAuthTokenAndStatus(String lastAuthToken, String status);
+
     Page<T> findAllBySessionIdAndStatus(String sessionId, String status, Pageable pageable);
 
     Optional<T> findByIdAndSessionIdAndStatus(long id, String sessionId, String status);

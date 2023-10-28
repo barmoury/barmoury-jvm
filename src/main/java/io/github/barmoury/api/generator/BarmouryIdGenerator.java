@@ -2,6 +2,8 @@ package io.github.barmoury.api.generator;
 
 import io.github.barmoury.util.FieldUtil;
 import org.hibernate.HibernateException;
+import org.hibernate.Session;
+import org.hibernate.boot.model.naming.Identifier;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.id.IdentifierGenerator;
 
@@ -16,11 +18,18 @@ public class BarmouryIdGenerator implements IdentifierGenerator {
         String tableName = FieldUtil.getTableName(o.getClass());
         String id = sharedSessionContractImplementor.getEntityPersister(o.getClass().getName(), o)
                 .getIdentifierPropertyName();
-        String query = String.format("SELECT %s FROM %s ORDER BY %s DESC LIMIT 1", id, tableName, id);
-
-        Object[] ids = sharedSessionContractImplementor.createQuery(query, String.class).stream().toArray();
-        if (ids.length > 0) return Long.parseLong(ids[0].toString()) + 1;
-        return 1L;
+        Identifier schema = sharedSessionContractImplementor.getSessionFactory().getJdbcServices().getJdbcEnvironment()
+                .getCurrentSchema();
+        if (schema == null) {
+            schema = sharedSessionContractImplementor.getSessionFactory().getJdbcServices().getJdbcEnvironment()
+                    .getCurrentCatalog();
+        }
+        String query = String.format("SELECT `AUTO_INCREMENT` FROM INFORMATION_SCHEMA.TABLES " +
+                " WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' ", schema.getCanonicalName(), tableName);
+        long value = ((Long)sharedSessionContractImplementor
+                .createNativeQuery(query)
+                .getSingleResult()) + 1L;
+        return value;
     }
 
 }

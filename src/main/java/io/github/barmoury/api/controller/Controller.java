@@ -65,8 +65,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public void preDelete(HttpServletRequest request, Authentication authentication, T1 entity, Object id) {}
     public void postDelete(HttpServletRequest request, Authentication authentication, T1 entity) {}
 
+    public <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, ApiResponse<T> apiResponse) {
+        return ApiResponse.build(httpStatus, apiResponse);
+    }
+
     public <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message) {
-        return ApiResponse.build(httpStatus, data, message);
+        return processResponse(httpStatus, new ApiResponse<>(data, message));
     }
 
     public void setup(Class<T1> entityClass, JpaRepository<T1, Long> repository) {

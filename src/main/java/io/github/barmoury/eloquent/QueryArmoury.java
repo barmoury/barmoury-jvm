@@ -62,6 +62,38 @@ public class QueryArmoury {
     }
 
     @SuppressWarnings("unchecked")
+    public <T> T getEntityById(String tableName, Long id) {
+        Query query = entityManager.createNativeQuery(
+                String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
+                        tableName, id))
+                .unwrap(org.hibernate.query.Query.class)
+                .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        return ((T) query.getSingleResult());
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T getEntityById(String tableName, String column, Object value) {
+        Query query = entityManager.createNativeQuery(
+                String.format("SELECT entity.* FROM %s entity WHERE %s = :value LIMIT 1",
+                        tableName, column))
+                .unwrap(org.hibernate.query.Query.class)
+                .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        query.setParameter("value", value);
+        return ((T) query.getSingleResult());
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T getEntityById(Long id, Class<T> clazz) {
+        String tableName = clazz.getAnnotation(Entity.class).name();
+        Query query = entityManager.createNativeQuery(
+                String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
+                        tableName, id), clazz)
+                .unwrap(org.hibernate.query.Query.class)
+                .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        return ((T) query.getSingleResult());
+    }
+
+    @SuppressWarnings("unchecked")
     public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         String tableName = clazz.getAnnotation(Entity.class).name();
@@ -250,8 +282,8 @@ public class QueryArmoury {
             containsIntervalValues = requestFields.containsKey(fromKey) && requestFields.containsKey(toKey);
         }
         if (containsIntervalValues) {
-            from = (String) (requestFields.get(fromKey).toArray())[3];
-            to = (String) (requestFields.get(toKey).toArray())[3];
+            from = (String) ((Object[]) (requestFields.get(fromKey).toArray())[3])[0];
+            to = (String) ((Object[]) (requestFields.get(toKey).toArray())[3])[0];
             startDate = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT, Locale.ENGLISH).parse(from);
             toDate = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT, Locale.ENGLISH).parse(to);
         }
@@ -383,9 +415,9 @@ public class QueryArmoury {
 
                                              String differentUnit,
                                              long different) throws ParseException  {
-        Object[] modified = requestFields.remove(toKey).toArray(); modified[3] = newEndStr;
+        Object[] modified = requestFields.remove(toKey).toArray(); modified[3] = new String[]{newEndStr};
         requestFields.putAll(toKey, Arrays.asList(modified));
-        modified = requestFields.remove(fromKey).toArray(); modified[3] = newStartStr;
+        modified = requestFields.remove(fromKey).toArray(); modified[3] = new String[]{newStartStr};
         requestFields.putAll(fromKey, Arrays.asList(modified));
         ObjectNode result = getResourceStat(statRequestFields, requestFields, currentPercentageMap, entityManager, request,
                 whereFilterString, statQuery, false, tableName, clazz);
@@ -937,6 +969,7 @@ public class QueryArmoury {
                             validValues.add(value);
                             if (!anyValuePresent) anyValuePresent = true;
                         }
+                        values = new String[validValues.size()];
                         validValues.toArray(values);
                         if (!anyValuePresent) continue;
                         queryParam = (objectFilter && requestParamFilter.columnObjectFieldsIsSnakeCase()
@@ -983,7 +1016,7 @@ public class QueryArmoury {
             requestFields.put(queryParam, columnName);
             requestFields.put(queryParam, isPresent);
             requestFields.put(queryParam, requestParamFilter);
-            requestFields.put(queryParam, values[0]);
+            requestFields.put(queryParam, values);
             if (!resolveStatQueryAnnotations && entity != null) {
                 requestFields.put(queryParam, fieldClass);
                 joinTables.put(entity.name(), joinColumn);
@@ -1049,7 +1082,7 @@ public class QueryArmoury {
         } else if (operator == RequestParamFilter.Operator.NE) {
             relationPart.append(String.format(" != :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.IN) {
-            relationPart.append(String.format(" IN :%s ", matchingFieldName));
+            relationPart.append(String.format(" IN (:%s) ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.GT_EQ) {
             relationPart.append(String.format(" >= :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.LT_EQ) {
@@ -1069,7 +1102,7 @@ public class QueryArmoury {
         } else if (operator == RequestParamFilter.Operator.STARTS_WITH) {
             relationPart.append(String.format(" LIKE CONCAT(:%s, '%%')", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.NOT_IN) {
-            relationPart.append(String.format(" NOT IN :%s ", matchingFieldName));
+            relationPart.append(String.format(" NOT IN (:%s) ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.OBJECT_EQ) {
             relationPart.append(String.format(" LIKE CONCAT('%%\"%s\":', :%s, ',%%') OR entity.%s LIKE CONCAT('%%\"%s\":', :%s, '}')",
                     objectField, matchingFieldName, column, objectField, matchingFieldName));
@@ -1120,7 +1153,14 @@ public class QueryArmoury {
 
         for (String matchingFieldName : requestFields.keySet()) {
             Object[] values = requestFields.get(matchingFieldName).toArray();
-            Object value = values[3];
+            RequestParamFilter requestParamFilter = (RequestParamFilter) values[2];
+            Object value;
+            if (requestParamFilter != null && (requestParamFilter.operator() == RequestParamFilter.Operator.IN
+                    || requestParamFilter.operator() == RequestParamFilter.Operator.NOT_IN)) {
+                value = new ArrayList<>(Arrays.asList(((Object[]) values[3])));
+            } else {
+                value = ((Object[]) values[3])[0];
+            }
             query = query.setParameter(matchingFieldName, value);
         }
         return query;
@@ -1225,7 +1265,7 @@ public class QueryArmoury {
                 tableName, joinColumn.referencedColumnName());
         MultiValuedMap<String, Object> requestFields = new ArrayListValuedHashMap<>();
         requestFields.put("value", null); requestFields.put("value", null);
-        requestFields.put("value", null); requestFields.put("value", value);
+        requestFields.put("value", null); requestFields.put("value", new Object[]{value});
         Map<String, Object> entry = singleQueryResultAsMap(null, queryString, entityManager, requestFields);
         Map<String, Object[]> joinColumnFields = FieldUtil.findJoinColumnFields(tClass);
         if (resolvedClasses != null) resolvedClasses.add(tClass);
