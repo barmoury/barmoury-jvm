@@ -8,16 +8,19 @@ import io.github.barmoury.api.model.ApiResponse;
 import io.github.barmoury.api.model.Model;
 import io.github.barmoury.api.model.UserDetails;
 import io.github.barmoury.audit.Auditor;
+import io.github.barmoury.copier.Copier;
 import io.github.barmoury.eloquent.QueryArmoury;
 import io.github.barmoury.util.FieldUtil;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;
+import lombok.SneakyThrows;
 import org.hibernate.validator.HibernateValidatorFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -43,8 +46,8 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     String fineName;
     Class<T1> entityClass;
     JpaRepository<T1, Long> repository;
-    @Autowired EntityManager entityManager;
     @Autowired @Getter QueryArmoury queryArmoury;
+    @PersistenceContext EntityManager entityManager;
     @Autowired LocalValidatorFactoryBean localValidatorFactoryBean;
     public static final String NO_RESOURCE_FORMAT_STRING = "No %s found with the specified id";
     static final String ACCESS_DENIED = "Access denied. You do not have the required role to access this endpoint";
@@ -61,7 +64,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public void preCreate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
     public void postCreate(HttpServletRequest request, Authentication authentication, T1 entity) {}
     public void preUpdate(HttpServletRequest request, Authentication authentication, T1 entity, T2 entityRequest) {}
-    public void postUpdate(HttpServletRequest request, Authentication authentication, T1 entity) {}
+    public void postUpdate(HttpServletRequest request, Authentication authentication, T1 prevEntity, T1 entity) {}
     public void preDelete(HttpServletRequest request, Authentication authentication, T1 entity, Object id) {}
     public void postDelete(HttpServletRequest request, Authentication authentication, T1 entity) {}
 
@@ -238,6 +241,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         return processResponse(HttpStatus.OK, resource, String.format("%s fetch successfully", this.fineName));
     }
 
+    @SneakyThrows
     @RequestMapping(value = "/{id}", method = RequestMethod.PATCH, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> update(HttpServletRequest httpServletRequest, Authentication authentication,
                                     @PathVariable Object id,
@@ -255,23 +259,27 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
             userDetails = secondUserDetails;
         }
         injectUpdateFieldId(httpServletRequest, request);
-        T1 resource = getResourceById(id);
-        postGetResourceById(httpServletRequest, authentication, resource);
+        T1 previousResource = getResourceById(id);
+        postGetResourceById(httpServletRequest, authentication, previousResource);
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
-                .constraintValidatorPayload(resource.getId())
+                .constraintValidatorPayload(previousResource.getId())
                 .getValidator();
         Set<? extends ConstraintViolation<?>> errors = validator
                 .validate(request, ValidationGroups.Update.class);
         if (!errors.isEmpty()) {
             throw new ConstraintViolationException(request.getClass(), errors);
         }
+        entityManager.detach(previousResource);
+        T1 resource = entityClass.getDeclaredConstructor()
+                .newInstance();
+        Copier.copyBlindly(resource, previousResource);
         resource.resolve(request, queryArmoury, userDetails);
         this.preUpdate(httpServletRequest, authentication, resource, request);
         String msg = validateBeforeCommit(resource);
         if (msg != null) throw new IllegalArgumentException(msg);
         repository.saveAndFlush(resource);
-        this.postUpdate(httpServletRequest, authentication, resource);
+        this.postUpdate(httpServletRequest, authentication, previousResource, resource);
         preResponse(resource);
         return processResponse(HttpStatus.OK, resource, String.format("%s updated successfully", this.fineName));
     }
