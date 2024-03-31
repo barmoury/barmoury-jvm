@@ -13,16 +13,14 @@ import org.hibernate.validator.constraintvalidation.HibernateConstraintValidator
 import org.hibernate.validator.internal.engine.constraintvalidation.ConstraintValidatorContextImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Retention(RetentionPolicy.RUNTIME)
+@Repeatable(ValidationQuery.Container.class)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
 @Constraint(validatedBy = ValidationQuery.Validator.class)
 public @interface ValidationQuery {
@@ -34,6 +32,12 @@ public @interface ValidationQuery {
     String[] andClauses() default {};
     boolean checkIsZero() default false;
     Class<? extends Payload>[] payload() default {};
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
+    @interface Container {
+        ValidationQuery[] value();
+    }
 
     class Validator implements ConstraintValidator<ValidationQuery, Object> {
 

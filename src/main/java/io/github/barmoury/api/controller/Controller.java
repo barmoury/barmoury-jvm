@@ -53,6 +53,9 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     static final String ACCESS_DENIED = "Access denied. You do not have the required role to access this endpoint";
 
     public void preResponse(T1 entity) {}
+    public void preResponses(Page<T1> entities) {
+        entities.forEach(this::preResponse);
+    }
     public boolean resolveSubEntities() {
         return true;
     }
@@ -67,6 +70,10 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public void postUpdate(HttpServletRequest request, Authentication authentication, T1 prevEntity, T1 entity) {}
     public void preDelete(HttpServletRequest request, Authentication authentication, T1 entity, Object id) {}
     public void postDelete(HttpServletRequest request, Authentication authentication, T1 entity) {}
+
+    public void handleSqlInjectionQuery(HttpServletRequest request, Authentication authentication) {
+        throw new UnsupportedOperationException("SQL injection attack detected");
+    }
 
     public <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, ApiResponse<T> apiResponse) {
         return ApiResponse.build(httpStatus, apiResponse);
@@ -101,6 +108,18 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                         String.format(NO_RESOURCE_FORMAT_STRING, fineName));
     }
 
+    public T1 getResourceById(Object id, Authentication authentication) {
+        return getResourceById(id);
+    }
+
+    MutableHttpServletRequest sanitizeAndGetRequestParameters(HttpServletRequest request, Authentication authentication) {
+        MutableHttpServletRequest mutableHttpServletRequest = new MutableHttpServletRequest(request);
+        if (mutableHttpServletRequest.getParameter(QueryArmoury.BARMOURY_RAW_SQL_PARAMETER_KEY) != null) {
+            handleSqlInjectionQuery(request, authentication);
+        }
+        return mutableHttpServletRequest;
+    }
+
     @SuppressWarnings("unchecked")
     public T2 injectUpdateFieldId(HttpServletRequest httpServletRequest,
                                                T2 resourceRequest) {
@@ -111,7 +130,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         }
         Map<String, Object> pathParameters = (Map<String, Object>) httpServletRequest
                 .getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
-        if (pathParameters.containsKey("id")) resourceRequest.updateEntityId = pathParameters.get("id");
+        if (pathParameters.containsKey("id")) resourceRequest.___BARMOURY_UPDATE_ENTITY_ID___ = pathParameters.get("id");
         return resourceRequest;
     }
 
@@ -135,7 +154,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        request = preQuery(new MutableHttpServletRequest(request), authentication);
+        request = preQuery(sanitizeAndGetRequestParameters(request, authentication), authentication);
         return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
@@ -148,10 +167,10 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        request = preQuery(new MutableHttpServletRequest(request), authentication);
+        request = preQuery(sanitizeAndGetRequestParameters(request, authentication), authentication);
         Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass, resolveSubEntities(),
                 skipRecursiveSubEntities());
-        resources.forEach(this::preResponse);
+        this.preResponses(resources);
         return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
                 this.fineName));
     }
@@ -235,7 +254,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        T1 resource = getResourceById(id);
+        T1 resource = getResourceById(id, authentication);
         postGetResourceById(request, authentication, resource);
         preResponse(resource);
         return processResponse(HttpStatus.OK, resource, String.format("%s fetch successfully", this.fineName));
@@ -259,7 +278,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
             userDetails = secondUserDetails;
         }
         injectUpdateFieldId(httpServletRequest, request);
-        T1 previousResource = getResourceById(id);
+        T1 previousResource = getResourceById(id, authentication);
         postGetResourceById(httpServletRequest, authentication, previousResource);
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
@@ -294,7 +313,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         if (roles != null && roles.length > 0 && Arrays.stream(roles).noneMatch(request::isUserInRole)) {
             throw new AccessDeniedException(ACCESS_DENIED);
         }
-        T1 resource = getResourceById(id);
+        T1 resource = getResourceById(id, authentication);
         postGetResourceById(request, authentication, resource);
         this.preDelete(request, authentication, resource, id);
         repository.delete(resource);

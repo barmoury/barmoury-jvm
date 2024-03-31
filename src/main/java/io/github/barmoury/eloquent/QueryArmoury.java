@@ -48,6 +48,7 @@ public class QueryArmoury {
 
     final String INTERVAL_COLUMN_DATE_FORMAT = "yyyy-MM-dd HH:mm";
     final String PERCENTAGE_CHANGE_RELAY_KEY = "___percentage_change____";
+    public static final String BARMOURY_RAW_SQL_PARAMETER_KEY = "___BARMOURY__RAW__SQL___";
 
     public QueryArmoury(SqlInterface sqlInterface) {
         this.sqlInterface = sqlInterface;
@@ -59,6 +60,10 @@ public class QueryArmoury {
 
     public Query createNativeQuery(String query) {
         return entityManager.createNativeQuery(query);
+    }
+
+    public <T> Query createNativeQuery(String query, Class<T> clazz) {
+        return entityManager.createNativeQuery(query, clazz);
     }
 
     @SuppressWarnings("unchecked")
@@ -94,10 +99,10 @@ public class QueryArmoury {
     }
 
     @SuppressWarnings("unchecked")
-    public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id)
+    public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id, boolean alwaysQuery)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         String tableName = clazz.getAnnotation(Entity.class).name();
-        if (id != null && id > 0 && field != null && id != field.getId()) {
+        if (id != null && id > 0 && (alwaysQuery || (field != null && id != field.getId()))) {
             Query query = entityManager.createNativeQuery(
                     String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
                             tableName, id), clazz);
@@ -109,6 +114,11 @@ public class QueryArmoury {
         return entity;
     }
 
+    public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id)
+            throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        return getEntityForUpdateById(clazz, field, entityId, id, false);
+    }
+
     public <T> Page<T> pageQuery(HttpServletRequest request, Pageable pageable, Class<T> clazz,
                                  boolean resolveSubEntities, boolean skipRecursiveSubEntities) {
         String tableName = FieldUtil.getTableName(clazz);
@@ -116,7 +126,9 @@ public class QueryArmoury {
         if (isSnakeCase) mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
         MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables,
                 false);
-        String queryString = String.format(" FROM %s entity %s", tableName, buildWhereFilter(requestFields, joinTables));
+        String[] rawJoinWhereQueries = getRawSqlQueriesFromRequestParameter(request);
+        String queryString = String.format(" FROM %s entity %s %s ", tableName, rawJoinWhereQueries[0],
+                buildWhereFilter(requestFields, joinTables, rawJoinWhereQueries[1]));
         Query countQuery = buildQueryObject(entityManager, String.format("SELECT COUNT(*) %s", queryString),
                 clazz, requestFields, false);
         int totalElements = ((Number) countQuery.getSingleResult()).intValue();
@@ -134,13 +146,34 @@ public class QueryArmoury {
         return pageQuery(request, pageable, clazz, true, true);
     }
 
+    public String[] getRawSqlQueriesFromRequestParameter(HttpServletRequest request) {
+        String[] result = new String[] { "", "" };
+        List<String[]> queryParts = new ArrayList<>();
+        String[] rawQueries = request.getParameterValues(QueryArmoury.BARMOURY_RAW_SQL_PARAMETER_KEY);
+        if (rawQueries == null) return result;
+        for (String rawQuery : rawQueries) {
+            queryParts.add(rawQuery.split("(where|WHERE)")); // 0 = join query, 1 = where query
+        }
+        StringBuilder joinQuery = new StringBuilder();
+        StringBuilder whereQuery = new StringBuilder();
+        for (String[] queryPart : queryParts) {
+            joinQuery.append(" ").append(queryPart[0]).append(" ");
+            if (queryPart.length > 1) {
+                whereQuery.append("AND (").append(queryPart[1]).append(")");
+            }
+        }
+        result[0] = joinQuery.toString();
+        result[1] = whereQuery.toString();
+        return result;
+    }
+
     public <T> JsonNode statWithQuery(HttpServletRequest request, Class<T> clazz) throws ParseException {
         String tableName = FieldUtil.getTableName(clazz);
         Map<String, JoinColumn> joinTables = new HashMap<>();
         StatQuery statQuery = FieldUtil.getAnnotation(clazz, StatQuery.class);
         MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables, false);
         MultiValuedMap<String, Object> statRequestFields = resolveQueryFields(clazz, request, null, true);
-        String whereFilterString = buildWhereFilter(requestFields, joinTables);
+        String whereFilterString = buildWhereFilter(requestFields, joinTables, null);
         return getResourceStat(statRequestFields, requestFields, null, entityManager, request,
                 whereFilterString, statQuery, true, tableName, clazz);
     }
@@ -1037,7 +1070,7 @@ public class QueryArmoury {
     }
 
     String buildWhereFilter(MultiValuedMap<String, Object> requestFields,
-                            Map<String, JoinColumn> joinTables) {
+                            Map<String, JoinColumn> joinTables, String rawWhereQuery) {
         boolean virginQuery = true;
         StringBuilder whereQuery = new StringBuilder();
         for (Map.Entry<String, JoinColumn> joinTable : joinTables.entrySet()) {
@@ -1059,6 +1092,13 @@ public class QueryArmoury {
                     matchingFieldName,
                     requestParamFilter.operator()));
             virginQuery = false;
+        }
+        if (rawWhereQuery != null && !rawWhereQuery.trim().equals("")) {
+            if (virginQuery) {
+                whereQuery.append(" WHERE ");
+                if (rawWhereQuery.startsWith("AND")) rawWhereQuery = rawWhereQuery.substring(3);
+            }
+            whereQuery.append(rawWhereQuery);
         }
         return whereQuery.toString();
     }
