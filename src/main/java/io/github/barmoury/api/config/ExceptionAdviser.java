@@ -97,6 +97,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(AccessDeniedException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Access denied. You do not have access to this file");
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -115,6 +116,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(org.springframework.security.access.AccessDeniedException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Access denied. You do not have the required access");
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -142,6 +144,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(HttpMessageConversionException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Unable to convert the object for response");
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -169,6 +172,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(HttpMessageNotReadableException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("The request body is missing or is invalid");
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -178,6 +182,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(InvalidDataAccessResourceUsageException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Invalid parameter, especially when querying an invalid column");
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -187,6 +192,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(MethodArgumentConversionNotSupportedException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Invalid parameter, check the values and try again");
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -239,7 +245,8 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     @ExceptionHandler(ParseException.class)
     public Object handleException(ParseException ex) {
         List<Object> errors = new ArrayList<>();
-        errors.add("An error occur while trying to parse an input, request query params. " + ex.getMessage());
+        errors.add("An error occur while trying to parse an input, request query params");
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -294,6 +301,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
     public Object handleException(SubModelResolveException ex) {
         List<Object> errors = new ArrayList<>();
         errors.add("Invalid field specified when updating " + ex.getEntity());
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 
@@ -305,6 +313,7 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
         errors.add(String.format("Unable to convert the parameter '%s' to the required type '%s' " +
                         "", ex.getValue(),
                 ex.getParameter().getGenericParameterType().getTypeName()));
+        errors.add(ex.getMessage());
         return processResponse(ex, errors);
     }
 

@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface CopyProperty {
     boolean ignore() default false;
-    boolean useNonZeroValue()  default false;
+    boolean useZeroValue()  default false;
     CopyValuePriority priority() default CopyValuePriority.SOURCE;
 
     enum CopyValuePriority {

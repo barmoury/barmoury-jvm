@@ -43,7 +43,7 @@ public class Model {
     }
 
     public static class Request {
-        public Object updateEntityId;
+        public Object ___BARMOURY_UPDATE_ENTITY_ID___;
     }
 
 }

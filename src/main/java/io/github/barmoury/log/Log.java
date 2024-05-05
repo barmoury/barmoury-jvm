@@ -62,6 +62,7 @@ public class Log extends Model {
         ERROR,
         TRACE,
         FATAL,
+        PANIC,
         VERBOSE
     }
 

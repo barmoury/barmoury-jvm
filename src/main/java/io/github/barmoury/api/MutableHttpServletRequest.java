@@ -16,7 +16,11 @@ public class MutableHttpServletRequest extends HttpServletRequestWrapper {
     // parameters
 
     public MutableHttpServletRequest addParameter(String name, String value) {
-        if (value != null) mutableParams.put(name, new String[] { value });
+        if (value == null) return this;
+        String[] existingValues = mutableParams.containsKey(name) ? mutableParams.get(name) : new String[]{};
+        String[] newValues = Arrays.copyOf(existingValues, existingValues.length + 1);
+        newValues[existingValues.length] = value;
+        mutableParams.put(name, newValues);
         return this;
     }
 

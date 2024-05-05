@@ -1,5 +1,6 @@
 package io.github.barmoury.validation;
 
+import io.github.barmoury.eloquent.StatQuery;
 import io.github.barmoury.util.Constants;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -10,13 +11,11 @@ import jakarta.validation.Payload;
 import org.hibernate.validator.internal.engine.constraintvalidation.ConstraintValidatorContextImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.annotation.*;
 import java.util.Collection;
 
 @Retention(RetentionPolicy.RUNTIME)
+@Repeatable(CollectionValuesExists.Container.class)
 @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
 @Constraint(validatedBy = CollectionValuesExists.CollectionValuesExistsValidator.class)
 public @interface CollectionValuesExists {
@@ -27,6 +26,12 @@ public @interface CollectionValuesExists {
     String table() default "";
     String whereClause() default "";
     String column();
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target({ ElementType.TYPE, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
+    @interface Container {
+        CollectionValuesExists[] value();
+    }
 
     class CollectionValuesExistsValidator implements ConstraintValidator<CollectionValuesExists, Object> {
 

@@ -34,7 +34,7 @@ public class CopierTest {
     }
 
     static class AnObject3 {
-        @CopyProperty(useNonZeroValue = true) long id = 30;
+        @CopyProperty(useZeroValue = false) long id = 30;
         float fl;
         double dob;
         String name;

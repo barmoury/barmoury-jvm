@@ -48,6 +48,7 @@ public class QueryArmoury {
 
     final String INTERVAL_COLUMN_DATE_FORMAT = "yyyy-MM-dd HH:mm";
     final String PERCENTAGE_CHANGE_RELAY_KEY = "___percentage_change____";
+    public static final String BARMOURY_RAW_SQL_PARAMETER_KEY = "___BARMOURY__RAW__SQL___";
 
     public QueryArmoury(SqlInterface sqlInterface) {
         this.sqlInterface = sqlInterface;
@@ -61,11 +62,47 @@ public class QueryArmoury {
         return entityManager.createNativeQuery(query);
     }
 
+    public <T> Query createNativeQuery(String query, Class<T> clazz) {
+        return entityManager.createNativeQuery(query, clazz);
+    }
+
     @SuppressWarnings("unchecked")
-    public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id)
+    public <T> T getEntityById(String tableName, Long id) {
+        Query query = entityManager.createNativeQuery(
+                String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
+                        tableName, id))
+                .unwrap(org.hibernate.query.Query.class)
+                .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        return ((T) query.getSingleResult());
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T getEntityById(String tableName, String column, Object value) {
+        Query query = entityManager.createNativeQuery(
+                String.format("SELECT entity.* FROM %s entity WHERE %s = :value LIMIT 1",
+                        tableName, column))
+                .unwrap(org.hibernate.query.Query.class)
+                .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        query.setParameter("value", value);
+        return ((T) query.getSingleResult());
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T getEntityById(Long id, Class<T> clazz) {
+        String tableName = clazz.getAnnotation(Entity.class).name();
+        Query query = entityManager.createNativeQuery(
+                String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
+                        tableName, id), clazz)
+                .unwrap(org.hibernate.query.Query.class)
+                .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
+        return ((T) query.getSingleResult());
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id, boolean alwaysQuery)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         String tableName = clazz.getAnnotation(Entity.class).name();
-        if (id != null && id > 0 && field != null && id != field.getId()) {
+        if (id != null && id > 0 && (alwaysQuery || (field != null && id != field.getId()))) {
             Query query = entityManager.createNativeQuery(
                     String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
                             tableName, id), clazz);
@@ -77,6 +114,11 @@ public class QueryArmoury {
         return entity;
     }
 
+    public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id)
+            throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        return getEntityForUpdateById(clazz, field, entityId, id, false);
+    }
+
     public <T> Page<T> pageQuery(HttpServletRequest request, Pageable pageable, Class<T> clazz,
                                  boolean resolveSubEntities, boolean skipRecursiveSubEntities) {
         String tableName = FieldUtil.getTableName(clazz);
@@ -84,7 +126,9 @@ public class QueryArmoury {
         if (isSnakeCase) mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
         MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables,
                 false);
-        String queryString = String.format(" FROM %s entity %s", tableName, buildWhereFilter(requestFields, joinTables));
+        String[] rawJoinWhereQueries = getRawSqlQueriesFromRequestParameter(request);
+        String queryString = String.format(" FROM %s entity %s %s ", tableName, rawJoinWhereQueries[0],
+                buildWhereFilter(requestFields, joinTables, rawJoinWhereQueries[1]));
         Query countQuery = buildQueryObject(entityManager, String.format("SELECT COUNT(*) %s", queryString),
                 clazz, requestFields, false);
         int totalElements = ((Number) countQuery.getSingleResult()).intValue();
@@ -102,13 +146,34 @@ public class QueryArmoury {
         return pageQuery(request, pageable, clazz, true, true);
     }
 
+    public String[] getRawSqlQueriesFromRequestParameter(HttpServletRequest request) {
+        String[] result = new String[] { "", "" };
+        List<String[]> queryParts = new ArrayList<>();
+        String[] rawQueries = request.getParameterValues(QueryArmoury.BARMOURY_RAW_SQL_PARAMETER_KEY);
+        if (rawQueries == null) return result;
+        for (String rawQuery : rawQueries) {
+            queryParts.add(rawQuery.split("(where|WHERE)")); // 0 = join query, 1 = where query
+        }
+        StringBuilder joinQuery = new StringBuilder();
+        StringBuilder whereQuery = new StringBuilder();
+        for (String[] queryPart : queryParts) {
+            joinQuery.append(" ").append(queryPart[0]).append(" ");
+            if (queryPart.length > 1) {
+                whereQuery.append("AND (").append(queryPart[1]).append(")");
+            }
+        }
+        result[0] = joinQuery.toString();
+        result[1] = whereQuery.toString();
+        return result;
+    }
+
     public <T> JsonNode statWithQuery(HttpServletRequest request, Class<T> clazz) throws ParseException {
         String tableName = FieldUtil.getTableName(clazz);
         Map<String, JoinColumn> joinTables = new HashMap<>();
         StatQuery statQuery = FieldUtil.getAnnotation(clazz, StatQuery.class);
         MultiValuedMap<String, Object> requestFields = resolveQueryFields(clazz, request, joinTables, false);
         MultiValuedMap<String, Object> statRequestFields = resolveQueryFields(clazz, request, null, true);
-        String whereFilterString = buildWhereFilter(requestFields, joinTables);
+        String whereFilterString = buildWhereFilter(requestFields, joinTables, null);
         return getResourceStat(statRequestFields, requestFields, null, entityManager, request,
                 whereFilterString, statQuery, true, tableName, clazz);
     }
@@ -250,8 +315,8 @@ public class QueryArmoury {
             containsIntervalValues = requestFields.containsKey(fromKey) && requestFields.containsKey(toKey);
         }
         if (containsIntervalValues) {
-            from = (String) (requestFields.get(fromKey).toArray())[3];
-            to = (String) (requestFields.get(toKey).toArray())[3];
+            from = (String) ((Object[]) (requestFields.get(fromKey).toArray())[3])[0];
+            to = (String) ((Object[]) (requestFields.get(toKey).toArray())[3])[0];
             startDate = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT, Locale.ENGLISH).parse(from);
             toDate = new SimpleDateFormat(INTERVAL_COLUMN_DATE_FORMAT, Locale.ENGLISH).parse(to);
         }
@@ -383,9 +448,9 @@ public class QueryArmoury {
 
                                              String differentUnit,
                                              long different) throws ParseException  {
-        Object[] modified = requestFields.remove(toKey).toArray(); modified[3] = newEndStr;
+        Object[] modified = requestFields.remove(toKey).toArray(); modified[3] = new String[]{newEndStr};
         requestFields.putAll(toKey, Arrays.asList(modified));
-        modified = requestFields.remove(fromKey).toArray(); modified[3] = newStartStr;
+        modified = requestFields.remove(fromKey).toArray(); modified[3] = new String[]{newStartStr};
         requestFields.putAll(fromKey, Arrays.asList(modified));
         ObjectNode result = getResourceStat(statRequestFields, requestFields, currentPercentageMap, entityManager, request,
                 whereFilterString, statQuery, false, tableName, clazz);
@@ -937,6 +1002,7 @@ public class QueryArmoury {
                             validValues.add(value);
                             if (!anyValuePresent) anyValuePresent = true;
                         }
+                        values = new String[validValues.size()];
                         validValues.toArray(values);
                         if (!anyValuePresent) continue;
                         queryParam = (objectFilter && requestParamFilter.columnObjectFieldsIsSnakeCase()
@@ -983,7 +1049,7 @@ public class QueryArmoury {
             requestFields.put(queryParam, columnName);
             requestFields.put(queryParam, isPresent);
             requestFields.put(queryParam, requestParamFilter);
-            requestFields.put(queryParam, values[0]);
+            requestFields.put(queryParam, values);
             if (!resolveStatQueryAnnotations && entity != null) {
                 requestFields.put(queryParam, fieldClass);
                 joinTables.put(entity.name(), joinColumn);
@@ -1004,7 +1070,7 @@ public class QueryArmoury {
     }
 
     String buildWhereFilter(MultiValuedMap<String, Object> requestFields,
-                            Map<String, JoinColumn> joinTables) {
+                            Map<String, JoinColumn> joinTables, String rawWhereQuery) {
         boolean virginQuery = true;
         StringBuilder whereQuery = new StringBuilder();
         for (Map.Entry<String, JoinColumn> joinTable : joinTables.entrySet()) {
@@ -1026,6 +1092,13 @@ public class QueryArmoury {
                     matchingFieldName,
                     requestParamFilter.operator()));
             virginQuery = false;
+        }
+        if (rawWhereQuery != null && !rawWhereQuery.trim().equals("")) {
+            if (virginQuery) {
+                whereQuery.append(" WHERE ");
+                if (rawWhereQuery.startsWith("AND")) rawWhereQuery = rawWhereQuery.substring(3);
+            }
+            whereQuery.append(rawWhereQuery);
         }
         return whereQuery.toString();
     }
@@ -1049,7 +1122,7 @@ public class QueryArmoury {
         } else if (operator == RequestParamFilter.Operator.NE) {
             relationPart.append(String.format(" != :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.IN) {
-            relationPart.append(String.format(" IN :%s ", matchingFieldName));
+            relationPart.append(String.format(" IN (:%s) ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.GT_EQ) {
             relationPart.append(String.format(" >= :%s ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.LT_EQ) {
@@ -1069,7 +1142,7 @@ public class QueryArmoury {
         } else if (operator == RequestParamFilter.Operator.STARTS_WITH) {
             relationPart.append(String.format(" LIKE CONCAT(:%s, '%%')", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.NOT_IN) {
-            relationPart.append(String.format(" NOT IN :%s ", matchingFieldName));
+            relationPart.append(String.format(" NOT IN (:%s) ", matchingFieldName));
         } else if (operator == RequestParamFilter.Operator.OBJECT_EQ) {
             relationPart.append(String.format(" LIKE CONCAT('%%\"%s\":', :%s, ',%%') OR entity.%s LIKE CONCAT('%%\"%s\":', :%s, '}')",
                     objectField, matchingFieldName, column, objectField, matchingFieldName));
@@ -1120,7 +1193,14 @@ public class QueryArmoury {
 
         for (String matchingFieldName : requestFields.keySet()) {
             Object[] values = requestFields.get(matchingFieldName).toArray();
-            Object value = values[3];
+            RequestParamFilter requestParamFilter = (RequestParamFilter) values[2];
+            Object value;
+            if (requestParamFilter != null && (requestParamFilter.operator() == RequestParamFilter.Operator.IN
+                    || requestParamFilter.operator() == RequestParamFilter.Operator.NOT_IN)) {
+                value = new ArrayList<>(Arrays.asList(((Object[]) values[3])));
+            } else {
+                value = ((Object[]) values[3])[0];
+            }
             query = query.setParameter(matchingFieldName, value);
         }
         return query;
@@ -1225,7 +1305,7 @@ public class QueryArmoury {
                 tableName, joinColumn.referencedColumnName());
         MultiValuedMap<String, Object> requestFields = new ArrayListValuedHashMap<>();
         requestFields.put("value", null); requestFields.put("value", null);
-        requestFields.put("value", null); requestFields.put("value", value);
+        requestFields.put("value", null); requestFields.put("value", new Object[]{value});
         Map<String, Object> entry = singleQueryResultAsMap(null, queryString, entityManager, requestFields);
         Map<String, Object[]> joinColumnFields = FieldUtil.findJoinColumnFields(tClass);
         if (resolvedClasses != null) resolvedClasses.add(tClass);

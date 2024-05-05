@@ -83,4 +83,10 @@ public abstract class Logger {
         System.exit(-1199810);
     }
 
+    public void panic(String format, Object ...args) {
+        this.log(Log.builder().level(Log.Level.PANIC)
+                .content(formatContent(format, args)).build());
+        System.exit(-1199811);
+    }
+
 }
