@@ -72,6 +72,8 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
                                 Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
 
         if (shouldNotAudit(httpServletRequest)) return true;
+        String action = httpServletRequest.getMethod();
+        String source = httpServletRequest.getRequestURI();
         ObjectNode objectNode = objectMapper.createObjectNode();
         objectNode.set("headers", objectMapper.convertValue(resolveHeaders(httpServletRequest), JsonNode.class));
         objectNode.set("parameters", objectMapper.convertValue(httpServletRequest.getParameterMap(), JsonNode.class));
@@ -82,9 +84,9 @@ public abstract class RequestAuditorAdapter extends RequestBodyAdviceAdapter imp
                 .isp(ipData.getIsp())
                 .extraData(objectNode)
                 .location(ipData.getLocation())
-                .action(httpServletRequest.getMethod())
                 .auditable(beforeAuditable(auditableNode))
-                .source(httpServletRequest.getRequestURI())
+                .source(source != null ? source : "UNKNOWN")
+                .action(action != null ? action : "UNKNOWN")
                 .ipAddress(httpServletRequest.getRemoteAddr())
                 .device(Device.build(httpServletRequest.getHeader("User-Agent"))).build()));
         return body;

@@ -90,7 +90,12 @@ public abstract class BactuatorController {
                                  boolean includeColumnNames) {
         try {
             Query query = getEntityManager().createNativeQuery(queryString);
-            if (queryString.toLowerCase().contains("update")) {
+            if (queryString.toLowerCase().contains("select")) {
+                if (!principalCan(httpServletRequest, "SELECT")) {
+                    throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "SELECT"));
+                }
+
+            } else if (queryString.toLowerCase().contains("update")) {
                 if (!principalCan(httpServletRequest, "UPDATE")) {
                     throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "UPDATE"));
                 }
@@ -111,9 +116,8 @@ public abstract class BactuatorController {
                     throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "TRUNCATE"));
                 }
                 return query.executeUpdate();
-            }
-            if (!principalCan(httpServletRequest, "SELECT")) {
-                throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "SELECT"));
+            } else if (!principalCan(httpServletRequest, "UNKNOWN")) {
+                throw new RuntimeException(String.format(SQL_QUERY_ERROR_MESSAGE, "UNKNOWN"));
             }
             if (!includeColumnNames) {
                 return query.getResultList();

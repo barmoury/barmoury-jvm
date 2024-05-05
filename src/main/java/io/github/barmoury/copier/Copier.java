@@ -41,7 +41,7 @@ public class Copier {
             if (!fieldIsAccessible) field.setAccessible(true);
             Object value = findUsableValue(fields);
             if (value != null) {
-                if (copyProperty != null && copyProperty.useNonZeroValue() && FieldUtil.isPrimitiveNumber(field)) {
+                if (copyProperty != null && FieldUtil.isPrimitiveNumber(field)) {
                     if (FieldUtil.objectsHasAnyType(field.getType(), int.class, Integer.class) && ((int) value > 0))
                     { field.set(target, value); }
                     else if (FieldUtil.objectsHasAnyType(field.getType(), long.class, Long.class) && ((Long) value > 0))

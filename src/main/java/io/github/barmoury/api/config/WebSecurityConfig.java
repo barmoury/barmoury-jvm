@@ -78,8 +78,8 @@ public class WebSecurityConfig implements WebMvcConfigurer {
         }
         http.authorizeHttpRequests().anyRequest().permitAll();
 
-        if (routeValidatorFilter != null) http.addFilterBefore(routeValidatorFilter, UsernamePasswordAuthenticationFilter.class);
         if (jwtRequestFilter != null) http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+        if (routeValidatorFilter != null) http.addFilterAfter(routeValidatorFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
