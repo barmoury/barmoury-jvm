@@ -6,7 +6,7 @@ public interface Cache<T> {
     void cache(T data);
 
     default long maxBufferSize() {
-        return 4; //150;
+        return 150;
     }
 
     default long intervalBeforeFlush() {
