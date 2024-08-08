@@ -14,6 +14,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.bouncycastle.bcpg.CompressionAlgorithmTags;
 import org.bouncycastle.bcpg.SymmetricKeyAlgorithmTags;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAdapter;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -56,13 +58,16 @@ public class PgpConfig {
     public static final String REQUEST_ATTRIBUTE_NAMING_STRATEGY_KEY = "barmoury.property.naming.strategy";
 
 
-    @Value("${barmoury.crypto.pgp.passwords:#{null}}") String[] pgpPasswords;
     @Value("${barmoury.crypto.pgp.encryption.charset:UTF-8}") String _charset;
     @Value("${spring.jackson.property-naming-strategy:}") String _namingStrategy;
     @Value("${barmoury.crypto.pgp.encryption.encoding:BASE64}") String _encoding;
+    @Value("${barmoury.crypto.pgp.path.passwords:#{null}}") String[] pgpPathPasswords;
     @Value("${barmoury.crypto.pgp.encryption.sign:false}") boolean signEncryptedPayload;
     @Value("${barmoury.crypto.pgp.key.path.public:#{null}}") String[] pgpPublicKeyPaths;
     @Value("${barmoury.crypto.pgp.key.path.private:#{null}}") String[] pgpPrivateKeyPaths;
+    @Value("${barmoury.crypto.pgp.string.passwords:#{null}}") String[] pgpStringPasswords;
+    @Value("${barmoury.crypto.pgp.key.string.public:#{null}}") String[] pgpPublicKeyStrings;
+    @Value("${barmoury.crypto.pgp.key.string.private:#{null}}") String[] pgpPrivateKeyStrings;
     @Value("${barmoury.crypto.pgp.encryption.sign.hash-algorithm:SHA256}") String hashAlgorithm;
 
     @SneakyThrows
@@ -78,7 +83,13 @@ public class PgpConfig {
         if (pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length > 0) {
             for (int index = 0;  index < pgpPrivateKeyPaths.length; index++) {
                 pgpManager.addSecretKeys(FileUtil.fileStream(pgpPrivateKeyPaths[index]),
-                        pgpPasswords[index].toCharArray());
+                        pgpPathPasswords[index].toCharArray());
+            }
+        }
+        if (pgpPrivateKeyStrings != null && pgpPrivateKeyStrings.length > 0) {
+            for (int index = 0;  index < pgpPrivateKeyStrings.length; index++) {
+                pgpManager.addSecretKeys(new ByteArrayInputStream(pgpPrivateKeyStrings[index].getBytes(StandardCharsets.UTF_8)),
+                        pgpStringPasswords[index].toCharArray());
             }
         }
         if (pgpPublicKeyPaths != null && pgpPublicKeyPaths.length > 0) {
@@ -86,30 +97,53 @@ public class PgpConfig {
                 pgpManager.addPublicKeys(FileUtil.fileStream(pgpPublicKeyPath));
             }
         }
-        if (pgpPublicKeyPaths != null && pgpPublicKeyPaths.length > 0) {
+        if (pgpPublicKeyStrings != null && pgpPublicKeyStrings.length > 0) {
+            for (String pgpPublicKeyString : pgpPublicKeyStrings) {
+                pgpManager.addPublicKeys(new ByteArrayInputStream(pgpPublicKeyString.getBytes(StandardCharsets.UTF_8)));
+            }
+        }
+        if ((pgpPublicKeyPaths != null && pgpPublicKeyPaths.length > 0) || (pgpPublicKeyStrings != null && pgpPublicKeyStrings.length > 0)) {
             PgpEncryption.PgpEncryptionBuilder pgpEncryptorBuilder = PgpEncryption.builder()
                     .armor(true)
                     .withIntegrityCheck(true)
                     .sign(signEncryptedPayload)
                     .compressionAlgorithm(CompressionAlgorithmTags.ZIP)
-                    .symmetricKeyAlgorithm(SymmetricKeyAlgorithmTags.AES_128)
-                    .publicKeyLocations(pgpPublicKeyPaths);
+                    .symmetricKeyAlgorithm(SymmetricKeyAlgorithmTags.AES_128);
+            if (pgpPublicKeyPaths != null && pgpPublicKeyPaths.length > 0) {
+                pgpEncryptorBuilder = pgpEncryptorBuilder.publicKeyLocations(pgpPublicKeyPaths);
+            }
+            if (pgpPublicKeyStrings != null && pgpPublicKeyStrings.length > 0) {
+                pgpEncryptorBuilder = pgpEncryptorBuilder.publicKeyStrings(pgpPublicKeyStrings);
+            }
             if (pgpManager != null) pgpEncryptorBuilder.pgpManager(pgpManager);
             pgpEncryptor = pgpEncryptorBuilder.build();
             PgpUtil.setPgpEncryptor(pgpEncryptor);
         }
 
-        if (pgpPasswords != null && pgpPasswords.length > 0 && pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length > 0) {
+        if ((pgpPathPasswords != null && pgpPathPasswords.length > 0 && pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length > 0)
+                || (pgpStringPasswords != null && pgpStringPasswords.length > 0 && pgpPrivateKeyStrings != null && pgpPrivateKeyStrings.length > 0)) {
             pgpDecryptor = PgpDecryption.builder().signed(signEncryptedPayload).build();
             if (pgpManager != null) pgpDecryptor.setPgpManager(pgpManager);
-            if (pgpPrivateKeyPaths.length == 1) {
-                pgpDecryptor.setPassCode(pgpPasswords[0]);
+            if ((pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length == 1) && (pgpPrivateKeyStrings == null || pgpPrivateKeyStrings.length == 0)) {
+                pgpDecryptor.setPassCode(pgpPathPasswords[0]);
                 pgpDecryptor.setPgpSecretKeyRingCollection(new PGPSecretKeyRingCollection(
                         PGPUtil.getDecoderStream(FileUtil.fileStream(applicationClass, pgpPrivateKeyPaths[0])),
                         new JcaKeyFingerprintCalculator()));
+            } else if ((pgpPrivateKeyStrings != null && pgpPrivateKeyStrings.length == 1) && (pgpPrivateKeyPaths == null || pgpPrivateKeyPaths.length == 0)) {
+                pgpDecryptor.setPassCode(pgpStringPasswords[0]);
+                pgpDecryptor.setPgpSecretKeyRingCollection(new PGPSecretKeyRingCollection(
+                        PGPUtil.getDecoderStream(new ByteArrayInputStream(pgpPrivateKeyStrings[0].getBytes(StandardCharsets.UTF_8))),
+                        new JcaKeyFingerprintCalculator()));
             } else {
-                pgpDecryptor.setPassCodes(pgpPasswords);
-                pgpDecryptor.setPrivateKeyLocations(pgpPrivateKeyPaths);
+                if (pgpPathPasswords == null) pgpPathPasswords = new String[]{};
+                if (pgpStringPasswords == null) pgpStringPasswords = new String[]{};
+                pgpDecryptor.setPassCodes(ArrayUtils.addAll(pgpPathPasswords, pgpStringPasswords));
+                if (pgpPrivateKeyPaths != null && pgpPrivateKeyPaths.length == 1) {
+                    pgpDecryptor.setPrivateKeyLocations(pgpPrivateKeyPaths);
+                }
+                if (pgpPrivateKeyStrings != null && pgpPrivateKeyStrings.length == 1) {
+                    pgpDecryptor.setPrivateStrings(pgpPrivateKeyPaths);
+                }
             }
             PgpUtil.setPgpDecryptor(pgpDecryptor);
         }
