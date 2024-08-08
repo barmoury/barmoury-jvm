@@ -36,6 +36,7 @@ public class PgpDecryption {
     @Setter String passCode;
     @Setter String[] passCodes;
     @Setter PgpManager pgpManager;
+    @Setter String[] privateStrings;
     @Setter String[] privateKeyLocations;
     @Builder.Default int bufferSize = 1 << 16;
     @Setter PGPSecretKeyRingCollection pgpSecretKeyRingCollection;
@@ -62,7 +63,19 @@ public class PgpDecryption {
                             .setProvider(BouncyCastleProvider.PROVIDER_NAME).build(passCodes[index].toCharArray()));
                 }
             }
-            return null;
+        }
+        if (pgpSecretKeyRingCollection == null && privateStrings != null) {
+            int passcodeOffset = (privateKeyLocations != null ? privateKeyLocations.length : 0);
+            for (int index = 0; index < privateStrings.length; index++) {
+                PGPSecretKey pgpSecretKey = new PGPSecretKeyRingCollection(
+                        PGPUtil.getDecoderStream(FileUtil.fileStream(PgpConfig.getApplicationClass(),
+                                privateStrings[index])),
+                        new JcaKeyFingerprintCalculator()).getSecretKey(keyID);
+                if (pgpSecretKey != null) {
+                    return pgpSecretKey.extractPrivateKey(new JcePBESecretKeyDecryptorBuilder()
+                            .setProvider(BouncyCastleProvider.PROVIDER_NAME).build(passCodes[passcodeOffset + index].toCharArray()));
+                }
+            }
         }
         if (pgpSecretKeyRingCollection == null) return null;
         PGPSecretKey pgpSecretKey = pgpSecretKeyRingCollection.getSecretKey(keyID);

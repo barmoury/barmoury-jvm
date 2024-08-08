@@ -23,6 +23,7 @@ import org.bouncycastle.openpgp.operator.jcajce.JcePublicKeyKeyEncryptionMethodG
 
 import java.io.*;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.SecureRandom;
 import java.security.Security;
@@ -53,8 +54,9 @@ public class PgpEncryption {
     @Builder.Default int symmetricKeyAlgorithm = SymmetricKeyAlgorithmTags.AES_256; // TODO make configurable
     @Setter PGPSecretKeyRingCollection pgpSecretKeyRingCollection;
     PgpManager pgpManager;
-    String[] publicKeyLocations;
-    String[] signingKeyLocations;
+    @Builder.Default String[] publicKeyStrings = {};
+    @Builder.Default String[] publicKeyLocations = {};
+    @Builder.Default String[] signingKeyLocations = {};
 
     static {
         // Add Bouncy castle to JVM
@@ -143,6 +145,9 @@ public class PgpEncryption {
         List<InputStream> publicKeyStreams = new ArrayList<>();
         for (String publicKeyLocation : publicKeyLocations) {
             publicKeyStreams.add(FileUtil.fileStream(PgpConfig.getApplicationClass(), publicKeyLocation));
+        }
+        for (String publicKeyString : publicKeyStrings) {
+            publicKeyStreams.add(new ByteArrayInputStream(publicKeyString.getBytes(StandardCharsets.UTF_8)));
         }
         return encrypt(clearData, publicKeyStreams);
     }

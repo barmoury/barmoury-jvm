@@ -76,14 +76,15 @@ public @interface ValidationQuery {
                 queryString.append(" WHERE (");
             }
             for (int index = 0; index < this.orClauses.length; index++) {
-                String clause = this.orClauses[index];
+                String clause = this.orClauses[index].trim();
                 queryString.append(clause);
                 while (clause.contains(":")) {
                     int endIndex = clause.indexOf("\\s+");
                     if (endIndex == -1) endIndex = clause.length();
                     String fieldName = clause.substring(clause.indexOf(":")+1, endIndex);
                     clause = clause.substring(clause.indexOf(":")+1).trim();
-                    fieldValues.putIfAbsent(fieldName, FieldUtil.getFieldValue(o, fieldName));
+                    Object value = fieldName.equals(Constants.SELF) ? o : FieldUtil.getFieldValue(o, fieldName);
+                    fieldValues.putIfAbsent(fieldName, value);
                 }
                 if (index < this.orClauses.length-1) {
                     queryString.append(" OR ");
@@ -92,7 +93,7 @@ public @interface ValidationQuery {
             if (this.orClauses.length > 0 && this.andClauses.length > 0) queryString.append(") AND (");
             for (int index = 0; index < this.andClauses.length; index++) {
                 String clause = this.andClauses[index].trim();
-                queryString.append(String.format(clause, o));
+                queryString.append(clause);
                 while (clause.contains(":")) {
                     int endIndex = clause.indexOf("\\s+");
                     if (endIndex == -1) endIndex = clause.length();
