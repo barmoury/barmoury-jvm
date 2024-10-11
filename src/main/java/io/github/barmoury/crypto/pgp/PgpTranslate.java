@@ -9,7 +9,6 @@ import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
 import org.bouncycastle.util.encoders.Base32;
 
-@Log4j2
 @NoArgsConstructor
 @JsonDeserialize(using = PgpTranslateDeserializer.class)
 public class PgpTranslate {
@@ -34,7 +33,7 @@ public class PgpTranslate {
     public PgpEncryption getPgpEncryptor() {
         PgpEncryption pgpEncryption = PgpUtil.getPgpEncryptor();
         if (pgpEncryption == null) {
-            log.warn(String.format("%s: the PgpEncryption is null, check if barmoury.crypto.pgp.*" +
+            PgpUtil.warn(String.format("%s: the PgpEncryption is null, check if barmoury.crypto.pgp.*" +
                     " values are defined in your properties file, or add 'io.github.barmoury' in your component scan," +
                     " or override the method getPgpEncryptor in the class that extends this PgpTranslate",
                     this.getClass().getCanonicalName()));
