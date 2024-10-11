@@ -52,6 +52,7 @@ public class PgpUtil {
     }
 
     public static void warn(String message) {
+        if (log == null) return;
         log.warn(message);
     }
 
