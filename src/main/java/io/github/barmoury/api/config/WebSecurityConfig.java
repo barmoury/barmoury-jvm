@@ -3,12 +3,15 @@ package io.github.barmoury.api.config;
 import io.github.barmoury.crypto.pgp.PgpTranslateHttpMessageConverter;
 import io.github.barmoury.eloquent.QueryArmoury;
 import io.github.barmoury.eloquent.sqlinterface.MySqlInterface;
+import io.github.barmoury.eloquent.sqlinterface.PostgresInterface;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -45,14 +48,16 @@ public class WebSecurityConfig implements WebMvcConfigurer {
     @Autowired
     AutowireCapableBeanFactory autowireCapableBeanFactory;
 
-    @Value("${barmoury.crypto.pgp.payload.translate:true}") boolean pgpPayloadTranslate;
+    @Value("${barmoury.crypto.pgp.payload.translate:false}") boolean pgpPayloadTranslate;
 
     @Bean
+    @ConditionalOnMissingBean(name = "passwordEncoder")
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "filterChain")
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.cors().and().csrf().disable()
                 .sessionManagement()
@@ -109,14 +114,33 @@ public class WebSecurityConfig implements WebMvcConfigurer {
         }
     }
 
-    @Bean
-    QueryArmoury mySqlEloquentInterface() {
+    @Bean("mysql")
+    @ConditionalOnMissingBean(name = "mySqlQueryArmoury")
+    QueryArmoury mySqlQueryArmoury() {
         QueryArmoury  queryArmoury = new QueryArmoury(new MySqlInterface());
         queryArmoury.setEntityManager(entityManager);
         queryArmoury.setAutowireCapableBeanFactory(autowireCapableBeanFactory);
         String namingStrategy = environment.getProperty("spring.jackson.property-naming-strategy");
         if (namingStrategy != null) queryArmoury.setSnakeCase(namingStrategy.equalsIgnoreCase("SNAKE_CASE"));
         return queryArmoury;
+    }
+
+    @Bean("postgres")
+    @ConditionalOnMissingBean(name = "postgresQueryArmoury")
+    QueryArmoury postgresQueryArmoury() {
+        QueryArmoury  queryArmoury = new QueryArmoury(new PostgresInterface());
+        queryArmoury.setEntityManager(entityManager);
+        queryArmoury.setAutowireCapableBeanFactory(autowireCapableBeanFactory);
+        String namingStrategy = environment.getProperty("spring.jackson.property-naming-strategy");
+        if (namingStrategy != null) queryArmoury.setSnakeCase(namingStrategy.equalsIgnoreCase("SNAKE_CASE"));
+        return queryArmoury;
+    }
+
+    @Bean
+    @Primary
+    @ConditionalOnMissingBean(name = "queryArmoury")
+    QueryArmoury queryArmoury() {
+        return mySqlQueryArmoury();
     }
 
     public static class CorsMapping {

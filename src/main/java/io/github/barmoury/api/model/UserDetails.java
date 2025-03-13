@@ -6,18 +6,23 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 @Getter
 public class UserDetails<T> implements org.springframework.security.core.userdetails.UserDetails {
 
     T data;
     String id;
+    String language = "en";
     @Setter String authorityPrefix = "ROLE_";
     List<String> authoritiesValues = new ArrayList<>();
+
+    public UserDetails(String id, List<String> authoritiesValues, T data, String language) {
+        this.id = id;
+        this.data = data;
+        this.language = language;
+        this.authoritiesValues = authoritiesValues;
+    }
 
     public UserDetails(String id, List<String> authoritiesValues, T data) {
         this.id = id;
@@ -35,8 +40,19 @@ public class UserDetails<T> implements org.springframework.security.core.userdet
         this.data = data;
     }
 
+    public UserDetails(String id, T data, String language) {
+        this.id = id;
+        this.data = data;
+        this.language = language;
+    }
+
     public UserDetails(String id) {
         this(id, new ArrayList<>(), null);
+    }
+
+    public Locale getLocale() {
+        if (this.language == null) return Locale.ENGLISH;
+        return Locale.forLanguageTag(this.language);
     }
 
     @Override

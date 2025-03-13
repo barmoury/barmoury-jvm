@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.barmoury.api.model.Model;
+import io.github.barmoury.api.model.modelling.IdModel;
 import io.github.barmoury.eloquent.impl.RequestParamFilterOperatorImpl;
 import io.github.barmoury.util.FieldUtil;
 import jakarta.persistence.*;
@@ -14,6 +15,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.Setter;
 import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 import org.hibernate.query.sql.internal.NativeQueryImpl;
 import org.hibernate.transform.AliasToEntityMapResultTransformer;
 import org.springframework.beans.BeanUtils;
@@ -52,6 +55,7 @@ public class QueryArmoury {
 
     public QueryArmoury(SqlInterface sqlInterface) {
         this.sqlInterface = sqlInterface;
+        mapper.findAndRegisterModules();
     }
 
     public String test() {
@@ -69,8 +73,8 @@ public class QueryArmoury {
     @SuppressWarnings("unchecked")
     public <T> T getEntityById(String tableName, Long id) {
         Query query = entityManager.createNativeQuery(
-                String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
-                        tableName, id))
+                String.format("SELECT entity.* FROM %s entity WHERE id = %d %s",
+                        tableName, id, this.sqlInterface.limit(1)))
                 .unwrap(org.hibernate.query.Query.class)
                 .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
         return ((T) query.getSingleResult());
@@ -79,8 +83,8 @@ public class QueryArmoury {
     @SuppressWarnings("unchecked")
     public <T> T getEntityById(String tableName, String column, Object value) {
         Query query = entityManager.createNativeQuery(
-                String.format("SELECT entity.* FROM %s entity WHERE %s = :value LIMIT 1",
-                        tableName, column))
+                String.format("SELECT entity.* FROM %s entity WHERE %s = :value %s",
+                        tableName, column, this.sqlInterface.limit(1)))
                 .unwrap(org.hibernate.query.Query.class)
                 .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
         query.setParameter("value", value);
@@ -91,8 +95,8 @@ public class QueryArmoury {
     public <T> T getEntityById(Long id, Class<T> clazz) {
         String tableName = clazz.getAnnotation(Entity.class).name();
         Query query = entityManager.createNativeQuery(
-                String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
-                        tableName, id), clazz)
+                String.format("SELECT entity.* FROM %s entity WHERE id = %d %s",
+                        tableName, id, this.sqlInterface.limit(1)), clazz)
                 .unwrap(org.hibernate.query.Query.class)
                 .setResultTransformer(AliasToEntityMapResultTransformer.INSTANCE);
         return ((T) query.getSingleResult());
@@ -102,15 +106,17 @@ public class QueryArmoury {
     public <T extends Model> T getEntityForUpdateById(Class<T> clazz, T field, Long entityId, Long id, boolean alwaysQuery)
             throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         String tableName = clazz.getAnnotation(Entity.class).name();
-        if (id != null && id > 0 && (alwaysQuery || (field != null && id != field.getId()))) {
+        if (id != null && id > 0 && (alwaysQuery || ((field instanceof IdModel idModel) && id != idModel.getId()))) {
             Query query = entityManager.createNativeQuery(
-                    String.format("SELECT entity.* FROM %s entity WHERE id = %d LIMIT 1",
-                            tableName, id), clazz);
+                    String.format("SELECT entity.* FROM %s entity WHERE id = %d %s",
+                            tableName, id, this.sqlInterface.limit(1)), clazz);
             return ((T) query.getSingleResult());
         }
         if (field != null && entityId != 0L) return field;
         T entity = clazz.getDeclaredConstructor().newInstance();
-        entity.setId(id != null ? id : 0L);
+        if (entity instanceof IdModel idModel) {
+            idModel.setId(id != null ? id : 0L);
+        }
         return entity;
     }
 
@@ -815,8 +821,8 @@ public class QueryArmoury {
                     queryBuilder.append(whereFilterString);
                 }
                 queryBuilder.append(" GROUP BY entity.").append(columnName).append(" HAVING SUM(SIGN(1-SIGN(entity2.")
-                        .append(columnName).append("-entity.").append(columnName).append(")))/COUNT(*) > .5 LIMIT 1)")
-                        .append(" AS ").append(name);
+                        .append(columnName).append("-entity.").append(columnName).append(")))/COUNT(*) > .5 ")
+                        .append(this.sqlInterface.limit(1)).append(")") .append(" AS ").append(name);
                 columnQueryList.add(queryBuilder.toString());
             }
         }
@@ -862,7 +868,7 @@ public class QueryArmoury {
                     queryBuilder.append(whereFilterString);
                 }
                 queryBuilder.append(" GROUP BY entity.").append(columnName).append(" ORDER BY count DESC ")
-                        .append(" LIMIT ").append(occurrenceQuery.fetchCount());
+                        .append(this.sqlInterface.limit(occurrenceQuery.fetchCount()));
                 List<Map<String, Object>> rows = queryListResultAsMap(clazz, queryBuilder.toString(), entityManager,
                         requestFields);
                 ObjectNode occurrence = mapper.createObjectNode();
@@ -1219,8 +1225,8 @@ public class QueryArmoury {
                 pagination.append(",");
             }
         }
-        pagination.append(String.format(" LIMIT %d,%d ", (pageable.getPageNumber() * pageable.getPageSize()),
-                pageable.getPageSize()));
+        pagination.append(String.format(" %s %s ", this.sqlInterface.limit(pageable.getPageSize()),
+                this.sqlInterface.offset((long) pageable.getPageNumber() * pageable.getPageSize())));
         return pagination.toString();
     }
 
@@ -1253,8 +1259,9 @@ public class QueryArmoury {
                 Field field = (Field) values[0];
                 Class<?> tableClazz = (Class<?>) values[1];
                 JoinColumn joinColumn = (JoinColumn) values[2];
+                NotFound notFound = (NotFound) values[3];
                 nrow.put(isSnakeCase ? FieldUtil.toSnakeCase(field.getName()) : FieldUtil.toCamelCase(field.getName()),
-                        resolveSubEntity(field, joinColumn, tableClazz, row.get(key), resolvedClasses));
+                        resolveSubEntity(field, joinColumn, notFound, tableClazz, row.get(key), resolvedClasses));
             } else {
                 Object value = row.get(key);
                 Field field = FieldUtil.getDeclaredField(tClass, isSnakeCase ? FieldUtil.toCamelCase(key) : key);
@@ -1267,13 +1274,13 @@ public class QueryArmoury {
                             Constructor<?> converterConstructor = convert.converter().getDeclaredConstructor();
                             boolean accessibility = converterConstructor.canAccess(null);
                             if (!accessibility) converterConstructor.setAccessible(true);
-                            AttributeConverter<?, String> attributeConverter =
-                                    (AttributeConverter<?, String>) converterConstructor.newInstance();
+                            AttributeConverter<?, ?> attributeConverter =
+                                    (AttributeConverter<?, ?>) converterConstructor.newInstance();
                             if (autowireCapableBeanFactory != null) {
                                 autowireCapableBeanFactory.autowireBean(attributeConverter);
                             }
                             if (!accessibility) converterConstructor.setAccessible(false);
-                            value = attributeConverter.convertToEntityAttribute(String.valueOf(value));
+                            value = ((AttributeConverter<?, Object>) attributeConverter).convertToEntityAttribute(value);
                         } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
                                  NoSuchMethodException ex) {
                             ex.printStackTrace();
@@ -1288,6 +1295,7 @@ public class QueryArmoury {
 
     Object resolveSubEntity(Field field,
                             JoinColumn joinColumn,
+                            NotFound notFound,
                             Class<?> tClass,
                             Object value,
                             Set<Class<?>> resolvedClasses) {
@@ -1297,8 +1305,7 @@ public class QueryArmoury {
         }
         String tableName = joinColumn.table();
         if (tableName.isEmpty()) {
-            Entity entity = tClass.getAnnotation(Entity.class);
-            if (entity != null) tableName = entity.name();
+            tableName = FieldUtil.getTableName(tClass);
         }
         if (resolvedClasses != null && resolvedClasses.contains(tClass)) return null;
         String queryString = String.format("SELECT sub_entity.* FROM %s sub_entity WHERE %s = :value ",
@@ -1306,10 +1313,17 @@ public class QueryArmoury {
         MultiValuedMap<String, Object> requestFields = new ArrayListValuedHashMap<>();
         requestFields.put("value", null); requestFields.put("value", null);
         requestFields.put("value", null); requestFields.put("value", new Object[]{value});
-        Map<String, Object> entry = singleQueryResultAsMap(null, queryString, entityManager, requestFields);
-        Map<String, Object[]> joinColumnFields = FieldUtil.findJoinColumnFields(tClass);
-        if (resolvedClasses != null) resolvedClasses.add(tClass);
-        return processSingleRow(entry, joinColumnFields, tClass, true, resolvedClasses);
+        try {
+            Map<String, Object> entry = singleQueryResultAsMap(null, queryString, entityManager, requestFields);
+            Map<String, Object[]> joinColumnFields = FieldUtil.findJoinColumnFields(tClass);
+            if (resolvedClasses != null) resolvedClasses.add(tClass);
+            return processSingleRow(entry, joinColumnFields, tClass, true, resolvedClasses);
+        } catch (Exception ex) {
+            if (notFound == null || notFound.action() == NotFoundAction.EXCEPTION) {
+                throw ex;
+            }
+        }
+        return null;
     }
 
     <T>  Map<String, Object> singleQueryResultAsMap(Class<T> clazz,

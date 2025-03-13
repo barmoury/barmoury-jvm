@@ -22,6 +22,7 @@ public abstract class JwtTokenUtil {
 
     String secret;
     static final String BARMOURY_DATA = "BARMOURY_DATA";
+    static final String BARMOURY_LANGUAGE = "BARMOURY_LANGUAGE";
     static final String BARMOURY_AUTHORITIES = "BARMOURY_AUTHORITIES";
 
     public String getSecret() {
@@ -88,10 +89,13 @@ public abstract class JwtTokenUtil {
         List<String> authorities = (List<String>) ((encryptor != null)
                 ? encryptor.decrypt((String)claims.get(BARMOURY_AUTHORITIES))
                 : claims.get(BARMOURY_AUTHORITIES));
+        String language = (String) ((encryptor != null)
+                ? encryptor.decrypt((String)claims.get(BARMOURY_LANGUAGE))
+                : claims.get(BARMOURY_LANGUAGE));
         String subject = ((encryptor != null)
                 ? (String) encryptor.decrypt(claims.getSubject())
                 : claims.getSubject());
-        return new UserDetails<>(subject, authorities, data);
+        return new UserDetails<>(subject, authorities, data, language);
     }
 
     public <T> UserDetails<?> validate(String token) {
@@ -108,6 +112,9 @@ public abstract class JwtTokenUtil {
         claims.put(BARMOURY_AUTHORITIES, (encryptor != null
                 ? encryptor.encrypt(userDetails.getAuthoritiesValues())
                 : userDetails.getAuthoritiesValues()));
+        claims.put(BARMOURY_LANGUAGE, (encryptor != null
+                ? encryptor.encrypt(userDetails.getLanguage())
+                : userDetails.getLanguage()));
         String subject = (encryptor != null
                 ? encryptor.encrypt(userDetails.getUsername())
                 : userDetails.getUsername());

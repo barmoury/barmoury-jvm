@@ -7,6 +7,7 @@ import io.github.barmoury.api.exception.RouteMethodNotSupportedException;
 import io.github.barmoury.api.model.ApiResponse;
 import io.github.barmoury.api.model.Model;
 import io.github.barmoury.api.model.UserDetails;
+import io.github.barmoury.api.model.modelling.IdModel;
 import io.github.barmoury.audit.Auditor;
 import io.github.barmoury.copier.Copier;
 import io.github.barmoury.eloquent.QueryArmoury;
@@ -115,6 +116,10 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         return getResourceById(id);
     }
 
+    public T1 getResourceById(Object id, Authentication authentication, HttpServletRequest request) {
+        return getResourceById(id, authentication);
+    }
+
     public String validateBeforeCommit(T1 r) {
         if (r == null) return "Invalid entity";
         return null;
@@ -128,7 +133,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         return new String[0];
     }
 
-    private void validateRouteAccess(HttpServletRequest request, RouteMethod routeMethod, String errMessage) {
+    public void validateRouteAccess(HttpServletRequest request, RouteMethod routeMethod, String errMessage) {
         if (shouldNotHonourMethod(routeMethod)) {
             throw new RouteMethodNotSupportedException(errMessage);
         }
@@ -170,16 +175,23 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
-    @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> index(HttpServletRequest request, Authentication authentication, Pageable pageable) {
-        this.validateRouteAccess(request, RouteMethod.INDEX,
-                "The GET '**/' route is not supported for this resource");
+    protected ResponseEntity<?> sIndex(HttpServletRequest request, Authentication authentication, Pageable pageable,
+                                       boolean skipAccessCheck) {
+        if (!skipAccessCheck) {
+            this.validateRouteAccess(request, RouteMethod.INDEX,
+                    "The GET '**/' route is not supported for this resource");
+        }
         request = preQuery(sanitizeAndGetRequestParameters(request, authentication), authentication);
         Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass, resolveSubEntities(),
                 skipRecursiveSubEntities());
         this.preResponses(resources);
         return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
                 this.fineName));
+    }
+
+    @RequestMapping(method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> index(HttpServletRequest request, Authentication authentication, Pageable pageable) {
+        return sIndex(request, authentication, pageable, false);
     }
 
     @SuppressWarnings("unchecked")
@@ -273,7 +285,8 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public ResponseEntity<?> show(HttpServletRequest request, Authentication authentication, @PathVariable Object id) {
         this.validateRouteAccess(request, RouteMethod.SHOW,
                 "The GET '**/{id}' route is not supported for this resource");
-        T1 resource = getResourceById(id, authentication);
+        request = preQuery(sanitizeAndGetRequestParameters(request, authentication), authentication);
+        T1 resource = getResourceById(id, authentication, request);
         postGetResourceById(request, authentication, resource);
         preResponse(resource);
         return processResponse(HttpStatus.OK, resource, String.format("%s fetch successfully", this.fineName));
@@ -292,11 +305,13 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
             userDetails = secondUserDetails;
         }
         injectUpdateFieldId(httpServletRequest, request);
-        T1 previousResource = getResourceById(id, authentication);
+        T1 previousResource = getResourceById(id, authentication, httpServletRequest);
         postGetResourceById(httpServletRequest, authentication, previousResource);
         Validator validator = localValidatorFactoryBean.unwrap(HibernateValidatorFactory.class )
                 .usingContext()
-                .constraintValidatorPayload(previousResource.getId())
+                .constraintValidatorPayload((previousResource instanceof IdModel previousResourceId
+                        ? previousResourceId.getId()
+                        : 0))
                 .getValidator();
         Set<? extends ConstraintViolation<?>> errors = validator
                 .validate(request, ValidationGroups.Update.class);
@@ -307,8 +322,8 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         T1 resource = entityClass.getDeclaredConstructor()
                 .newInstance();
         Copier.copyBlindly(resource, previousResource);
-        resource.resolve(request, queryArmoury, userDetails);
         this.preUpdate(httpServletRequest, authentication, resource, request);
+        resource.resolve(request, queryArmoury, userDetails);
         String msg = validateBeforeCommit(resource);
         if (msg != null) throw new IllegalArgumentException(msg);
         if (this.isUpdateAsynchronously()) {
@@ -333,7 +348,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public ResponseEntity<?> destroy(HttpServletRequest request, Authentication authentication, @PathVariable Object id) {
         this.validateRouteAccess(request, RouteMethod.DESTROY,
                 "The DELETE '**/{id}' route is not supported for this resource");
-        T1 resource = getResourceById(id, authentication);
+        T1 resource = getResourceById(id, authentication, request);
         postGetResourceById(request, authentication, resource);
         this.preDelete(request, authentication, resource, id);
         if (this.isUpdateAsynchronously()) {
@@ -359,10 +374,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
 
         this.validateRouteAccess(request, RouteMethod.DESTROY_MULTIPLE,
                 "The DELETE '**/multiple' route is not supported for this resource");
-        List<T1> resources = ids.stream().map(this::getResourceById).toList();
+        List<T1> resources = ids.stream().map((id) -> getResourceById(id, authentication, request)).toList();
         for (T1 resource : resources) {
             postGetResourceById(request, authentication, resource);
-            this.preDelete(request, authentication, resource, resource.getId());
+            this.preDelete(request, authentication, resource, (resource instanceof IdModel resourceId
+                    ? resourceId.getId()
+                    : 0));
             if (this.isDeleteAsynchronously()) {
                 new Thread(() -> {
                     try {

@@ -1,9 +1,11 @@
 package io.github.barmoury.validation;
 
+import io.github.barmoury.util.FieldUtil;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import jakarta.validation.Payload;
+import lombok.SneakyThrows;
 import org.hibernate.validator.internal.engine.constraintvalidation.ConstraintValidatorContextImpl;
 
 import java.lang.annotation.ElementType;
@@ -20,7 +22,7 @@ public @interface CollectionValuesShouldMatchAny {
     String[] values();
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
-    String message() default "The value {value} in the collection does not match any of these {values}";
+    String message() default "The field '{field}' value '{value}' in the collection does not match any of these {values}";
 
     class ValueMatchAnyValidator implements ConstraintValidator<CollectionValuesShouldMatchAny, Object> {
 
@@ -35,6 +37,7 @@ public @interface CollectionValuesShouldMatchAny {
         }
 
         @Override
+        @SneakyThrows
         public boolean isValid(Object o, ConstraintValidatorContext constraintValidatorContext) {
             if (o instanceof Collection) {
                 Collection<?> oValues = (Collection<?>) o;
@@ -44,7 +47,11 @@ public @interface CollectionValuesShouldMatchAny {
                     }
                 }
             }
-            ((ConstraintValidatorContextImpl) constraintValidatorContext).addMessageParameter("value", "(null)");
+            String fieldName = ((ConstraintValidatorContextImpl) constraintValidatorContext)
+                    .getConstraintViolationCreationContexts().get(0).getPath().asString();
+            ((ConstraintValidatorContextImpl) constraintValidatorContext)
+                    .addMessageParameter("value", "(null)")
+                    .addMessageParameter("field", fieldName);
             return false;
         }
     }
