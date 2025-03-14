@@ -15,7 +15,7 @@ import java.util.Optional;
 
 @Repository
 @Transactional
-public interface BarmourySessionRepository<T extends Session<?>>
+public interface BarmourySessionRepository<T extends Session<?>, I>
         extends JpaRepository<T, Long>, PagingAndSortingRepository<T, Long>  {
 
     Optional<T> findBySessionToken(String sessionToken);
@@ -26,7 +26,7 @@ public interface BarmourySessionRepository<T extends Session<?>>
 
     Page<T> findAllBySessionIdAndStatus(String sessionId, String status, Pageable pageable);
 
-    Optional<T> findByIdAndSessionIdAndStatus(long id, String sessionId, String status);
+    Optional<T> findByIdAndSessionIdAndStatus(I id, String sessionId, String status);
 
     Optional<T> findBySessionTokenAndLastAuthTokenAndStatus(String sessionToken, String lastAuthToken, String status);
 

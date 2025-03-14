@@ -9,6 +9,7 @@ import lombok.Setter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.i18n.SessionLocaleResolver;
 import org.springframework.web.servlet.support.RequestContextUtils;
@@ -18,6 +19,9 @@ import java.util.Objects;
 
 @SuppressWarnings("unchecked")
 public class TranslationConfig {
+
+    @Getter @Setter
+    public static Locale defaultLocale = Locale.ENGLISH;
 
     @Getter @Setter
     public static Translation translation = new Translation();
@@ -30,6 +34,10 @@ public class TranslationConfig {
         return "UTF-8";
     }
 
+    public static Locale getSessionLocale() {
+        return LocaleContextHolder.getLocale();
+    }
+
     @Bean
     @ConditionalOnMissingBean(name = "translation")
     public Translation translation() {
@@ -38,21 +46,6 @@ public class TranslationConfig {
         translation.setDefaultEncoding(getDefaultEncoding());
         setTranslation(translation);
         return translation;
-    }
-
-    public static LocaleResolver getLocaleResolver() {
-        return null;
-    }
-
-    public static void updateSessionLocale(HttpServletRequest request, HttpServletResponse response, Locale locale) {
-        if (request == null || response == null) return;
-        //LocaleResolver localeResolver = RequestContextUtils.getLocaleResolver(request);
-        //if (localeResolver == null) return;
-        getLocaleResolver().setLocale(request, response, locale);
-    }
-
-    public static void updateSessionLocale(HttpServletRequest request, HttpServletResponse response, String language) {
-        updateSessionLocale(request, response, Locale.forLanguageTag(language));
     }
 
 }

@@ -26,7 +26,7 @@ public class ApiResponse<T> {
     Object secondaryData;
 
     @Builder.Default
-    @JsonIgnore Locale locale = Locale.ENGLISH;
+    @JsonIgnore Locale locale = TranslationConfig.getSessionLocale();
 
     public ApiResponse(T data, String message, boolean success) {
         this.data = data;
@@ -57,52 +57,66 @@ public class ApiResponse<T> {
     }
 
     public ApiResponse(List<Object> errors, String message) {
-        this.errors = errors;
         this.success = false;
+        setErrors(errors);
         setMessage(message);
     }
 
     public ApiResponse(List<Object> errors, String message, Locale locale) {
-        this.errors = errors;
         this.success = false;
         this.locale = locale;
+        setErrors(errors);
         setMessage(message);
     }
 
     public ApiResponse(List<Object> errors, String message, Object secondaryData) {
-        this.errors = errors;
         this.success = false;
         this.secondaryData = secondaryData;
+        setErrors(errors);
         setMessage(message);
     }
 
     public ApiResponse(List<Object> errors, String message, Object secondaryData, Locale locale) {
-        this.errors = errors;
         this.success = false;
         this.locale = locale;
         this.secondaryData = secondaryData;
+        setErrors(errors);
         setMessage(message);
     }
 
     public ApiResponse(List<Object> errors) {
-        this.errors = errors;
         this.success = false;
+        setErrors(errors);
         setMessage(errors.get(0).toString());
     }
 
     public ApiResponse(List<Object> errors, Locale locale) {
-        this.errors = errors;
         this.success = false;
         this.locale = locale;
+        setErrors(errors);
         setMessage(errors.get(0).toString());
     }
 
     public void setMessage(String message) {
+        if (locale == null) locale = TranslationConfig.getSessionLocale();
         if (message.startsWith("{") && message.endsWith("}")) {
             this.message = TranslationConfig.getTranslation().t(message.substring(1, message.length()-1), locale);
             return;
         }
         this.message = message;
+    }
+
+    public void setErrors(List<Object> errors) {
+        this.errors = new ArrayList<>();
+        if (locale == null) locale = TranslationConfig.getSessionLocale();
+        for (Object error : errors) {
+            if (error instanceof String errorMessage) {
+                if (errorMessage.startsWith("{") && errorMessage.endsWith("}")) {
+                    error = TranslationConfig.getTranslation().t(errorMessage.substring(1, errorMessage.length()-1), locale);
+                }
+            }
+            this.errors.add(error);
+        }
     }
 
     public ApiResponse(T data, String message) {

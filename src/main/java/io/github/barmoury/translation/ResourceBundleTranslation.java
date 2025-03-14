@@ -1,6 +1,9 @@
 package io.github.barmoury.translation;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.NoSuchMessageException;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
@@ -11,9 +14,17 @@ import java.util.Objects;
 @Component
 public class ResourceBundleTranslation extends ReloadableResourceBundleMessageSource {
 
+    @Autowired
+    HttpServletRequest httpServletRequest;
+
+    public Locale getSessionLocale() {
+        LocaleContextHolder.getLocale();
+        return LocaleContextHolder.getLocale();
+    }
+
     @Nullable
     public String t(String code) {
-        return getMessage(code, null, code, Objects.requireNonNull(getDefaultLocale()));
+        return getMessage(code, null, code, getSessionLocale());
     }
 
     @Nullable
@@ -27,7 +38,7 @@ public class ResourceBundleTranslation extends ReloadableResourceBundleMessageSo
             return getMessage(code, null, locale);
         } catch (NoSuchMessageException exception) {
             if (useDefault) {
-                return getMessage(code, null, Objects.requireNonNull(getDefaultLocale()));
+                return getMessage(code, null, getSessionLocale());
             }
             throw exception;
         }
@@ -35,7 +46,7 @@ public class ResourceBundleTranslation extends ReloadableResourceBundleMessageSo
 
     @Nullable
     public String t(String code, String defaultMessage) {
-        return getMessage(code, null, defaultMessage, Objects.requireNonNull(getDefaultLocale()));
+        return getMessage(code, null, defaultMessage, getSessionLocale());
     }
 
     @Nullable
@@ -45,7 +56,7 @@ public class ResourceBundleTranslation extends ReloadableResourceBundleMessageSo
 
     @Nullable
     public String t(String code, @Nullable Object[] args, String defaultMessage) {
-        return getMessage(code, args, defaultMessage, Objects.requireNonNull(getDefaultLocale()));
+        return getMessage(code, args, defaultMessage, getSessionLocale());
     }
 
     @Nullable

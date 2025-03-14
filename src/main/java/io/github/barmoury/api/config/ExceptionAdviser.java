@@ -393,6 +393,15 @@ public abstract class ExceptionAdviser extends DefaultResponseErrorHandler {
         return processResponse(ex, errors);
     }
 
+    @ResponseBody
+    @ExceptionHandler(HttpStatusException.class)
+    public Object handleHttpStatusException(HttpStatusException ex, HttpServletResponse response, Locale locale) {
+        List<Object> errors = new ArrayList<>();
+        errors.add(ex.getMessage());
+        response.setStatus(ex.getHttpStatus().value());
+        return processResponse(ex, errors);
+    }
+
     @SneakyThrows
     @ResponseBody
     @ExceptionHandler(ValidationException.class)

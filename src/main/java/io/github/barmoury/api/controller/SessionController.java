@@ -25,13 +25,13 @@ import org.springframework.web.bind.annotation.RequestMethod;
 
 import java.util.Optional;
 
-public abstract class SessionController<T extends Session<?>> extends Controller<T, Model.Request> {
+public abstract class SessionController<T extends Session<?>, L> extends Controller<T, Model.Request> {
 
     @Autowired
     JwtTokenUtil jwtTokenUtil;
 
     @Autowired
-    SessionService<T> sessionService;
+    SessionService<T, L> sessionService;
 
     @Override
     @RequestMapping(method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -66,7 +66,7 @@ public abstract class SessionController<T extends Session<?>> extends Controller
 
     @SuppressWarnings("unchecked")
     @RequestMapping(value = "/self/{id}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> getSelfSession(Authentication authentication, HttpServletRequest request, @PathVariable long id) {
+    public ResponseEntity<?> getSelfSession(Authentication authentication, HttpServletRequest request, @PathVariable L id) {
         UserDetails<?> userDetails = (UserDetails<?>) authentication.getPrincipal();
         Optional<T> barmourySession = sessionService.getSelfSession(id, userDetails.getId());
         if (barmourySession.isEmpty()) {
@@ -79,7 +79,7 @@ public abstract class SessionController<T extends Session<?>> extends Controller
 
     @SuppressWarnings("unchecked")
     @RequestMapping(value = "/self/{id}", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> deleteSelfSession(Authentication authentication, HttpServletRequest request, @PathVariable long id) {
+    public ResponseEntity<?> deleteSelfSession(Authentication authentication, HttpServletRequest request, @PathVariable L id) {
         UserDetails<?> userDetails = (UserDetails<?>) authentication.getPrincipal();
         Optional<T> barmourySession = sessionService.getSelfSession(id, userDetails.getId());
         if (barmourySession.isEmpty()) {
