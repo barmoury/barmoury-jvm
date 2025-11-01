@@ -37,7 +37,8 @@ public @interface ShouldBeNull {
         @SneakyThrows
         public boolean isValid(Object o, ConstraintValidatorContext constraintValidatorContext) {
             if (o == null) return true;
-            String fieldName = FieldUtil.getVariableName(o);
+            String fieldName = ((ConstraintValidatorContextImpl) constraintValidatorContext)
+                    .getConstraintViolationCreationContexts().get(0).getPath().asString();
             ((ConstraintValidatorContextImpl) constraintValidatorContext)
                     .addMessageParameter("field", fieldName);
             return false;

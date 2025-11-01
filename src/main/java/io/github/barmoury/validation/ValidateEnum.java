@@ -25,7 +25,7 @@ public @interface ValidateEnum {
     Class<?> value();
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
-    String message() default "The value {value} does not match any of these {values}";
+    String message() default "The field '{field}' value '{value}' does not match any of these {values}";
 
     class Validator implements ConstraintValidator<ValidateEnum, Object> {
 

@@ -1,9 +1,12 @@
 package io.github.barmoury.validation;
 
+import io.github.barmoury.util.FieldUtil;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import jakarta.validation.Payload;
+import lombok.NoArgsConstructor;
+import lombok.SneakyThrows;
 import org.hibernate.validator.internal.engine.constraintvalidation.ConstraintValidatorContextImpl;
 
 import java.lang.annotation.ElementType;
@@ -21,12 +24,17 @@ public @interface ValueShouldMatchAny {
     String[] value() default {};
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
-    String message() default "The value {value} does not match any of these {values}";
+    String message() default "The field '{field}' value '{value}' does not match any of these {values}";
 
+    @NoArgsConstructor
     class Validator implements ConstraintValidator<ValueShouldMatchAny, Object> {
 
         String[] values;
         Class<?>[] groups;
+
+        public Validator(String[] values) {
+            this.values = values;
+        }
 
         @Override
         public void initialize(ValueShouldMatchAny constraintAnnotation) {
@@ -36,19 +44,23 @@ public @interface ValueShouldMatchAny {
         }
 
         @Override
+        @SneakyThrows
         public boolean isValid(Object o, ConstraintValidatorContext constraintValidatorContext) {
             if (o == null) {
                 o = "null";
             } else {
                 o = String.valueOf(o);
                 for (String value : this.values) {
-                    if (value.equals(o) || Pattern.compile(value).matcher((String) o).find()) {
+                    if (value.equals(o) || (value.contains("\\") && Pattern.compile(value).matcher((String) o).find())) {
                         return true;
                     }
                 }
             }
-            ((ConstraintValidatorContextImpl) constraintValidatorContext).addMessageParameter("value", o);
+            String fieldName = ((ConstraintValidatorContextImpl) constraintValidatorContext)
+                    .getConstraintViolationCreationContexts().get(0).getPath().asString();
             ((ConstraintValidatorContextImpl) constraintValidatorContext)
+                    .addMessageParameter("value", o)
+                    .addMessageParameter("field", fieldName)
                     .addMessageParameter("values", Arrays.toString(this.values));
             return false;
         }

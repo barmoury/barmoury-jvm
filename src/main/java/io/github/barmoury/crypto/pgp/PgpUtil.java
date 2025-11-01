@@ -6,6 +6,7 @@ import io.github.barmoury.copier.Copier;
 import io.jsonwebtoken.impl.TextCodec;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.util.encoders.Base32;
 
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 
+@Log4j2
 public class PgpUtil {
 
     @Getter @Setter static Gson gson;
@@ -47,6 +49,11 @@ public class PgpUtil {
 
     public static byte[] decodeEncryptedString(String pgpEncrypted) throws PGPException, IOException {
         return decodeEncrypted(pgpEncrypted.getBytes(charset));
+    }
+
+    public static void warn(String message) {
+        if (log == null) return;
+        log.warn(message);
     }
 
 }

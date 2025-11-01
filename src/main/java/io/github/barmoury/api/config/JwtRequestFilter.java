@@ -11,6 +11,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,18 +21,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.LocaleResolver;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Component
 public abstract class JwtRequestFilter extends OncePerRequestFilter {
 
     @Autowired ObjectMapper objectMapper;
+    @Autowired(required = false) LocaleResolver localeResolver;
     Map<String, List<String>> openUrlMatchers = new HashMap<>();
+
+    @Value("${barmoury.locale.use.jwt.locale:false}") boolean useJwtLocale;
 
     @Deprecated
     public JwtTokenUtil getJwtTokenUtil() {
@@ -98,7 +100,8 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
                     return;
                 }
             } catch (Exception ex) {
-                processResponse(httpServletResponse, "The JWT authorization failed", HttpServletResponse.SC_UNAUTHORIZED);
+                processResponse(httpServletResponse, "The JWT authorization failed. Reason: " + ex.getMessage(),
+                        HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
             if (userDetails == null) {
@@ -120,10 +123,12 @@ public abstract class JwtRequestFilter extends OncePerRequestFilter {
                     authentication = new UsernamePasswordAuthenticationToken(
                     userDetails, null,
                     userDetails.getAuthorities());
-
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpServletRequest));
-
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            if (useJwtLocale) {
+                localeResolver.setLocale(httpServletRequest, httpServletResponse,
+                        Locale.forLanguageTag(userDetails.getLanguage()));
+            }
             break;
         }
         filterChain.doFilter(httpServletRequest, httpServletResponse);

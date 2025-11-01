@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.NotFound;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -124,6 +125,7 @@ public class FieldUtil {
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
             Field[] fields = c.getDeclaredFields();
             for (Field field : fields) {
+                NotFound notFound = field.getAnnotation(NotFound.class);
                 JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
                 if (joinColumn != null) {
                     Class<?> fieldType = field.getType();
@@ -131,7 +133,8 @@ public class FieldUtil {
                             new Object[]{
                                     field,
                                     fieldType,
-                                    joinColumn
+                                    joinColumn,
+                                    notFound
                             });
                 }
             }
@@ -173,9 +176,9 @@ public class FieldUtil {
 
     public static String getTableName(Class<?> clazz) {
         Entity entity = clazz.getAnnotation(Entity.class);
-        if (entity != null) return entity.name();
+        if (entity != null && entity.name() != null && !entity.name().isBlank()) return entity.name();
         Table table = clazz.getAnnotation(Table.class);
-        if (table != null) return table.name();
+        if (table != null && table.name() != null && !table.name().isBlank()) return table.name();
         return null;
     }
 

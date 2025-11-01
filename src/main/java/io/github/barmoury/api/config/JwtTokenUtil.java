@@ -22,6 +22,7 @@ public abstract class JwtTokenUtil {
 
     String secret;
     static final String BARMOURY_DATA = "BARMOURY_DATA";
+    static final String BARMOURY_LANGUAGE = "BARMOURY_LANGUAGE";
     static final String BARMOURY_AUTHORITIES = "BARMOURY_AUTHORITIES";
 
     public String getSecret() {
@@ -69,14 +70,18 @@ public abstract class JwtTokenUtil {
         return expiration.before(new Date());
     }
 
-    public boolean validate(String key, String token, UserDetails<?> userDetails) {
+    public boolean isValid(String key, String token, UserDetails<?> userDetails) {
         final String id = getIdFromToken(key, token);
         return (id.equals(userDetails.getId()) && !isTokenExpired(key, token));
     }
 
-    public boolean validate(String token, UserDetails<?> userDetails) {
-        final String id = getIdFromToken(null, token);
-        return validate(null, token, userDetails);
+    public boolean isValid(String token, UserDetails<?> userDetails) {
+        String secret = getSecret();
+        Claims claims = Jwts.parser().setSigningKey(secret.getBytes(StandardCharsets.UTF_8))
+                .parseClaimsJws(token).getBody();
+        final String id = claims.getSubject();
+        Date expiration = claims.getExpiration();
+        return (id.equals(userDetails.getId()) && !expiration.before(new Date()));
     }
 
     public <T> UserDetails<?> validate(String key, String token) {
@@ -85,13 +90,16 @@ public abstract class JwtTokenUtil {
         T data = (T) ((encryptor != null)
                 ? encryptor.decrypt((String)claims.get(BARMOURY_DATA))
                 : claims.get(BARMOURY_DATA));
+        String language = (String) ((encryptor != null)
+                ? encryptor.decrypt((String)claims.get(BARMOURY_LANGUAGE))
+                : claims.get(BARMOURY_LANGUAGE));
         List<String> authorities = (List<String>) ((encryptor != null)
                 ? encryptor.decrypt((String)claims.get(BARMOURY_AUTHORITIES))
                 : claims.get(BARMOURY_AUTHORITIES));
         String subject = ((encryptor != null)
                 ? (String) encryptor.decrypt(claims.getSubject())
                 : claims.getSubject());
-        return new UserDetails<>(subject, authorities, data);
+        return new UserDetails<>(subject, authorities, data, language);
     }
 
     public <T> UserDetails<?> validate(String token) {
@@ -105,6 +113,9 @@ public abstract class JwtTokenUtil {
         claims.put(BARMOURY_DATA, (encryptor != null
                 ? encryptor.encrypt(userDetails.getData())
                 : userDetails.getData()));
+        claims.put(BARMOURY_LANGUAGE, (encryptor != null
+                ? encryptor.encrypt(userDetails.getLanguage())
+                : userDetails.getLanguage()));
         claims.put(BARMOURY_AUTHORITIES, (encryptor != null
                 ? encryptor.encrypt(userDetails.getAuthoritiesValues())
                 : userDetails.getAuthoritiesValues()));

@@ -1,7 +1,15 @@
 package io.github.barmoury.eloquent;
 
-public interface SqlInterface {
+public abstract class SqlInterface {
 
-    String database();
+    public abstract String database();
+
+    public String limit(long l) {
+        return String.format("LIMIT %d", l);
+    }
+
+    public String offset(long l) {
+        return String.format("OFFSET %d", l);
+    }
 
 }

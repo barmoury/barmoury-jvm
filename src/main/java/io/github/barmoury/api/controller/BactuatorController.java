@@ -63,6 +63,10 @@ public abstract class BactuatorController {
     public abstract <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message);
     public abstract List<Class<? extends Controller<? extends Model, ? extends Model.Request>>> controllers();
 
+    public Map<String, String> extraData() {
+        return new HashMap<>();
+    }
+
     @RequestMapping(value = "/health", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> healthCheck() {
         Map<String, Object> response = new HashMap<>();
@@ -82,6 +86,7 @@ public abstract class BactuatorController {
         }
         introspect.put("users", userStatistics());
         introspect.put("earnings", earningStatistics());
+        introspect.put(resolveCasing("extraData"), extraData());
         introspect.put(resolveCasing("downloadCounts"), downloadsCount());
         return processResponse(HttpStatus.OK, introspect, "introspect data fetched successfully");
     }

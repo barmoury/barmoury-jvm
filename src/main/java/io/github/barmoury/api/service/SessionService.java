@@ -13,10 +13,10 @@ import io.github.barmoury.api.repository.BarmourySessionRepository;
 import java.util.Date;
 import java.util.Optional;
 
-public abstract class SessionService<T extends Session<?>> {
+public abstract class SessionService<T extends Session<?>, L> {
 
     public abstract T initializeSession();
-    public abstract BarmourySessionRepository<T> getBarmourySessionRepository();
+    public abstract BarmourySessionRepository<T, L> getBarmourySessionRepository();
 
     public Page<T> getActiveSessions(String sessionId, Pageable pageable) {
         getBarmourySessionRepository().updatedExpiredSessions();
@@ -39,7 +39,7 @@ public abstract class SessionService<T extends Session<?>> {
                 .findByLastAuthTokenAndStatus(lastAccessToken, status);
     }
 
-    public Optional<T> getSelfSession(long id, String sessionId) {
+    public Optional<T> getSelfSession(L id, String sessionId) {
         return getBarmourySessionRepository()
                 .findByIdAndSessionIdAndStatus(id, sessionId, "ACTIVE");
     }
