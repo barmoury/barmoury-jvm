@@ -66,10 +66,24 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         this.fineName = this.entityClass.getSimpleName();
     }
 
-    public void preResponse(T1 entity) {}
-    public void preResponses(Page<T1> entities) {
-        entities.forEach(this::preResponse);
+    public void preResponse(T1 entity) {
+
     }
+
+    public void preResponse(HttpServletRequest request, Authentication authentication, T1 entity) {
+        this.preResponse(entity);
+    }
+
+    public void preResponses(Page<T1> entities) {
+        for (T1 entity : entities) {
+            preResponse(entity);
+        }
+    }
+
+    public void preResponses(HttpServletRequest request, Authentication authentication, Page<T1> entities) {
+        this.preResponses(entities);
+    }
+
     public boolean resolveSubEntities() {
         return true;
     }
@@ -102,8 +116,16 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         return ApiResponse.build(httpStatus, apiResponse);
     }
 
+    public <T> ResponseEntity<?> processResponse(HttpServletRequest request, Authentication authentication, HttpStatus httpStatus, ApiResponse<T> apiResponse) {
+        return processResponse(httpStatus, apiResponse);
+    }
+
     public <T> ResponseEntity<?> processResponse(HttpStatus httpStatus, T data, String message) {
         return processResponse(httpStatus, new ApiResponse<>(data, message));
+    }
+
+    public <T> ResponseEntity<?> processResponse(HttpServletRequest request, Authentication authentication, HttpStatus httpStatus, T data, String message) {
+        return processResponse(httpStatus, data, message);
     }
 
     public T1 getResourceById(Object id) {
@@ -172,7 +194,7 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
     public ResponseEntity<?> stat(HttpServletRequest request, Authentication authentication) throws ParseException {
         this.validateRouteAccess(request, RouteMethod.STAT, "The GET '**/stat' route is not supported for this resource");
         request = preQuery(sanitizeAndGetRequestParameters(request, authentication), authentication);
-        return processResponse(HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
+        return processResponse(request, authentication, HttpStatus.OK, queryArmoury.statWithQuery(request, entityClass), String.format("%s stat fetched successfully", this.fineName));
     }
 
     protected ResponseEntity<?> sIndex(HttpServletRequest request, Authentication authentication, Pageable pageable,
@@ -184,8 +206,8 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         request = preQuery(sanitizeAndGetRequestParameters(request, authentication), authentication);
         Page<T1> resources = queryArmoury.pageQuery(request, pageable, entityClass, resolveSubEntities(),
                 skipRecursiveSubEntities());
-        this.preResponses(resources);
-        return processResponse(HttpStatus.OK, resources, String.format("%s list fetched successfully",
+        this.preResponses(request, authentication, resources);
+        return processResponse(request, authentication, HttpStatus.OK, resources, String.format("%s list fetched successfully",
                 this.fineName));
     }
 
@@ -217,12 +239,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                     this.onAsynchronousError("Store", atomicResource.get(), ex);
                 }
             }).start();
-            return processResponse(HttpStatus.ACCEPTED, null, String.format("%s is being created", this.fineName));
+            return processResponse(httpServletRequest, authentication, HttpStatus.ACCEPTED, null, String.format("%s is being created", this.fineName));
         }
         resource = repository.saveAndFlush(resource);
         this.postCreate(httpServletRequest, authentication, resource);
-        preResponse(resource);
-        return processResponse(HttpStatus.CREATED, resource, String.format("%s created successfully", this.fineName));
+        preResponse(httpServletRequest, authentication, resource);
+        return processResponse(httpServletRequest, authentication, HttpStatus.CREATED, resource, String.format("%s created successfully", this.fineName));
     }
 
     @SuppressWarnings("unchecked")
@@ -271,13 +293,13 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                 continue;
             }
             this.postCreate(httpServletRequest, authentication, resource);
-            preResponse(resource);
+            preResponse(httpServletRequest, authentication, resource);
             results.add(resource);
         }
         if (this.isStoreAsynchronously()) {
-            return processResponse(HttpStatus.ACCEPTED, null, String.format("%ss are being created", this.fineName));
+            return processResponse(httpServletRequest, authentication, HttpStatus.ACCEPTED, null, String.format("%ss are being created", this.fineName));
         }
-        return processResponse(HttpStatus.CREATED, results,
+        return processResponse(httpServletRequest, authentication, HttpStatus.CREATED, results,
                 String.format("The %s(s) are created successfully", this.fineName));
     }
 
@@ -288,8 +310,8 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
         request = preQuery(sanitizeAndGetRequestParameters(request, authentication), authentication);
         T1 resource = getResourceById(id, authentication, request);
         postGetResourceById(request, authentication, resource);
-        preResponse(resource);
-        return processResponse(HttpStatus.OK, resource, String.format("%s fetch successfully", this.fineName));
+        preResponse(request, authentication, resource);
+        return processResponse(request, authentication, HttpStatus.OK, resource, String.format("%s fetch successfully", this.fineName));
     }
 
     @SneakyThrows
@@ -336,12 +358,12 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                     this.onAsynchronousError("Update", atomicResource.get(), ex);
                 }
             }).start();
-            return processResponse(HttpStatus.ACCEPTED, null, String.format("%s is being updated", this.fineName));
+            return processResponse(httpServletRequest, authentication, HttpStatus.ACCEPTED, null, String.format("%s is being updated", this.fineName));
         }
         resource = repository.saveAndFlush(resource);
         this.postUpdate(httpServletRequest, authentication, previousResource, resource);
-        preResponse(resource);
-        return processResponse(HttpStatus.OK, resource, String.format("%s updated successfully", this.fineName));
+        preResponse(httpServletRequest, authentication, resource);
+        return processResponse(httpServletRequest, authentication, HttpStatus.OK, resource, String.format("%s updated successfully", this.fineName));
     }
 
     @RequestMapping(value = "/{id}", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -360,11 +382,11 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
                     this.onAsynchronousError("Delete", resource, ex);
                 }
             }).start();
-            return processResponse(HttpStatus.ACCEPTED, null, String.format("%s is being deleted", this.fineName));
+            return processResponse(request, authentication, HttpStatus.ACCEPTED, null, String.format("%s is being deleted", this.fineName));
         }
         repository.delete(resource);
         this.postDelete(request, authentication, resource);
-        preResponse(resource);
+        preResponse(request, authentication, resource);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
@@ -393,10 +415,10 @@ public abstract class Controller<T1 extends Model, T2 extends Model.Request> {
             }
             repository.delete(resource);
             this.postDelete(request, authentication, resource);
-            preResponse(resource);
+            preResponse(request, authentication, resource);
         }
         if (this.isDeleteAsynchronously()) {
-            return processResponse(HttpStatus.ACCEPTED, null, String.format("%ss are being deleted", this.fineName));
+            return processResponse(request, authentication, HttpStatus.ACCEPTED, null, String.format("%ss are being deleted", this.fineName));
         }
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }

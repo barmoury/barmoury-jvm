@@ -72,7 +72,7 @@ public abstract class SessionController<T extends Session<?>, L> extends Control
         if (barmourySession.isEmpty()) {
             throw new EntityNotFoundException(String.format("no session found with the specified id '%d'", id));
         }
-        preResponse(barmourySession.get());
+        preResponse(request, authentication, barmourySession.get());
         return processResponse(HttpStatus.OK, barmourySession.get(),
                 String.format("%s fetched successfully", this.fineName));
     }

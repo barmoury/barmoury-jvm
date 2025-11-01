@@ -5,6 +5,7 @@ import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import jakarta.validation.Payload;
+import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 import org.hibernate.validator.internal.engine.constraintvalidation.ConstraintValidatorContextImpl;
 
@@ -25,10 +26,15 @@ public @interface ValueShouldMatchAny {
     Class<? extends Payload>[] payload() default {};
     String message() default "The field '{field}' value '{value}' does not match any of these {values}";
 
+    @NoArgsConstructor
     class Validator implements ConstraintValidator<ValueShouldMatchAny, Object> {
 
         String[] values;
         Class<?>[] groups;
+
+        public Validator(String[] values) {
+            this.values = values;
+        }
 
         @Override
         public void initialize(ValueShouldMatchAny constraintAnnotation) {

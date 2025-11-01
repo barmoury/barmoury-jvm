@@ -18,7 +18,6 @@ public class ResourceBundleTranslation extends ReloadableResourceBundleMessageSo
     HttpServletRequest httpServletRequest;
 
     public Locale getSessionLocale() {
-        LocaleContextHolder.getLocale();
         return LocaleContextHolder.getLocale();
     }
 

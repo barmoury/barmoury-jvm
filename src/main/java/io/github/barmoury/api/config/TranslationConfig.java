@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.LocaleResolver;
 import org.springframework.web.servlet.i18n.SessionLocaleResolver;
 import org.springframework.web.servlet.support.RequestContextUtils;
@@ -17,6 +18,7 @@ import org.springframework.web.servlet.support.RequestContextUtils;
 import java.util.Locale;
 import java.util.Objects;
 
+@Component
 @SuppressWarnings("unchecked")
 public class TranslationConfig {
 

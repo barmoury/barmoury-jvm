@@ -14,6 +14,7 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.tomcat.util.codec.binary.Base64;
 import org.hibernate.validator.HibernateValidatorFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.annotation.AnnotatedMethod;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import org.springframework.web.method.HandlerMethod;
@@ -31,7 +32,10 @@ public class PgpRequestBodyTranslator implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
-        PgpRequestHandler pgpRequestHandler = ((HandlerMethod) handler).getMethodAnnotation(PgpRequestHandler.class);
+        PgpRequestHandler pgpRequestHandler = null;
+        if (handler instanceof AnnotatedMethod) {
+            pgpRequestHandler = ((AnnotatedMethod) handler).getMethodAnnotation(PgpRequestHandler.class);
+        }
         if (pgpRequestHandler != null) {
             String payload = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
             if (payload.isBlank()) throw new IllegalArgumentException("the request body is empty, cannot" +
