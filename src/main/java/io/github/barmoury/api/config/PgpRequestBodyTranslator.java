@@ -1,7 +1,6 @@
 package io.github.barmoury.api.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.barmoury.api.exception.ConstraintViolationException;
 import io.github.barmoury.api.exception.PgpConstraintViolationException;
 import io.github.barmoury.crypto.pgp.PgpRequestHandler;
 import io.github.barmoury.crypto.pgp.PgpUtil;
@@ -11,13 +10,11 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
 import jakarta.validation.Validator;
 import lombok.extern.log4j.Log4j2;
-import org.apache.tomcat.util.codec.binary.Base64;
 import org.hibernate.validator.HibernateValidatorFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.AnnotatedMethod;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Set;
