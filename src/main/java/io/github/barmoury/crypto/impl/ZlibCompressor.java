@@ -38,9 +38,9 @@ public class ZlibCompressor implements IEncryptor<Object> {
     @Override
     @SneakyThrows
     public Object decrypt(String encrypted) {
-        if (encrypted == null || encrypted.length() == 0) return "";
+        if (encrypted == null || encrypted.isEmpty()) return "";
         ByteArrayInputStream bais =
-                new ByteArrayInputStream(org.apache.tomcat.util.codec.binary.Base64.decodeBase64(encrypted));
+                new ByteArrayInputStream(Base64.getDecoder().decode(encrypted));
         InflaterInputStream iis = new InflaterInputStream(bais);
         int length;
         StringBuilder result = new StringBuilder();

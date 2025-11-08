@@ -21,9 +21,9 @@ import java.util.function.Function;
 public abstract class JwtTokenUtil {
 
     String secret;
-    static final String BARMOURY_DATA = "BARMOURY_DATA";
-    static final String BARMOURY_LANGUAGE = "BARMOURY_LANGUAGE";
-    static final String BARMOURY_AUTHORITIES = "BARMOURY_AUTHORITIES";
+    static final String BARMOURY_JWT_DATA = "_BJD_";
+    static final String BARMOURY_JWT_LANGUAGE = "_BJL_";
+    static final String BARMOURY_JWT_AUTHORITIES = "_BJA_";
 
     public String getSecret() {
         if (secret == null) secret = ValueGenerator.generateRandomString(98);
@@ -53,7 +53,7 @@ public abstract class JwtTokenUtil {
 
     public List<String> getAuthoritiesFromToken(String key, String token) {
         Claims claims = getAllClaimsFromToken(key, token);
-        return (List<String>) claims.get(BARMOURY_AUTHORITIES);
+        return (List<String>) claims.get(BARMOURY_JWT_AUTHORITIES);
     }
 
     public <T> T getClaimFromToken(String key, String token, Function<Claims, T> claimsResolver) {
@@ -88,14 +88,14 @@ public abstract class JwtTokenUtil {
         Claims claims = getAllClaimsFromToken(key, token);
         IEncryptor<Object> encryptor = getEncryptor();
         T data = (T) ((encryptor != null)
-                ? encryptor.decrypt((String)claims.get(BARMOURY_DATA))
-                : claims.get(BARMOURY_DATA));
+                ? encryptor.decrypt((String)claims.get(BARMOURY_JWT_DATA))
+                : claims.get(BARMOURY_JWT_DATA));
         String language = (String) ((encryptor != null)
-                ? encryptor.decrypt((String)claims.get(BARMOURY_LANGUAGE))
-                : claims.get(BARMOURY_LANGUAGE));
+                ? encryptor.decrypt((String)claims.get(BARMOURY_JWT_LANGUAGE))
+                : claims.get(BARMOURY_JWT_LANGUAGE));
         List<String> authorities = (List<String>) ((encryptor != null)
-                ? encryptor.decrypt((String)claims.get(BARMOURY_AUTHORITIES))
-                : claims.get(BARMOURY_AUTHORITIES));
+                ? encryptor.decrypt((String)claims.get(BARMOURY_JWT_AUTHORITIES))
+                : claims.get(BARMOURY_JWT_AUTHORITIES));
         String subject = ((encryptor != null)
                 ? (String) encryptor.decrypt(claims.getSubject())
                 : claims.getSubject());
@@ -110,13 +110,13 @@ public abstract class JwtTokenUtil {
         Map<String, Object> claims = new HashMap<>();
         IEncryptor<Object> encryptor = getEncryptor();
         Date expiryDate = new Date(System.currentTimeMillis() + (tokenExpiryInSeconds) * 1000);
-        claims.put(BARMOURY_DATA, (encryptor != null
+        claims.put(BARMOURY_JWT_DATA, (encryptor != null
                 ? encryptor.encrypt(userDetails.getData())
                 : userDetails.getData()));
-        claims.put(BARMOURY_LANGUAGE, (encryptor != null
+        claims.put(BARMOURY_JWT_LANGUAGE, (encryptor != null
                 ? encryptor.encrypt(userDetails.getLanguage())
                 : userDetails.getLanguage()));
-        claims.put(BARMOURY_AUTHORITIES, (encryptor != null
+        claims.put(BARMOURY_JWT_AUTHORITIES, (encryptor != null
                 ? encryptor.encrypt(userDetails.getAuthoritiesValues())
                 : userDetails.getAuthoritiesValues()));
         String subject = (encryptor != null
