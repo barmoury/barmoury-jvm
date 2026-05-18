@@ -1011,55 +1011,39 @@ public class QueryArmoury {
                         values = new String[validValues.size()];
                         validValues.toArray(values);
                         if (!anyValuePresent) continue;
-                        queryParam = (objectFilter && requestParamFilter.columnObjectFieldsIsSnakeCase()
+                        isPresent = true;
+                        String newQueryParam = (objectFilter && requestParamFilter.columnObjectFieldsIsSnakeCase()
                                 ? FieldUtil.toSnakeCase(entry.getKey())
                                 : entry.getKey());
-                        isPresent = true;
-                        break;
+                        resolveIndividualMatchingQueryField(requestFields,
+                                requestParamFilter,
+                                joinTables,
+                                columnName,
+                                newQueryParam,
+                                isPresent,
+                                isEntity,
+                                values,
+                                field);
                     }
                 }
             }
-            if (!resolveStatQueryAnnotations && !isPresent && !requestParamFilter.alwaysQuery()) {
+            if (!resolveStatQueryAnnotations && isPresent) continue;
+            if (!resolveStatQueryAnnotations && !requestParamFilter.alwaysQuery()) {
                 continue;
             }
             if (resolveStatQueryAnnotations) queryParam = field.getName();
             if (requestFields.containsKey(queryParam)) {
                 continue;
             }
-            Entity entity = null;
-            Class<?> fieldClass = null;
-            JoinColumn joinColumn = null;
-            if (isEntity) {
-                fieldClass = field.getType();
-                entity = fieldClass.getAnnotation(Entity.class);
-                if (entity != null) {
-                    columnName = String.format("%s_entity.%s", entity.name(),
-                            queryParam.substring(queryParam.indexOf(".")+1));
-                }
-                Field actualSubField = null;
-                String[] nameParts = queryParam.split("\\.");
-                joinColumn = field.getAnnotation(JoinColumn.class);
-                String actualFieldName = nameParts[nameParts.length-1];
-                actualSubField = FieldUtil.getDeclaredField(fieldClass, isSnakeCase
-                        ? FieldUtil.toCamelCase(actualFieldName)
-                        : actualFieldName);
-                if (actualSubField == null) {
-                    actualSubField = FieldUtil.getDeclaredField(fieldClass, actualFieldName);
-                }
-                if (actualSubField != null) {
-                    RequestParamFilter actualRequestParamFilter = actualSubField.getAnnotation(RequestParamFilter.class);
-                    if (actualRequestParamFilter != null) requestParamFilter = actualRequestParamFilter;
-                }
-            }
-
-            requestFields.put(queryParam, columnName);
-            requestFields.put(queryParam, isPresent);
-            requestFields.put(queryParam, requestParamFilter);
-            requestFields.put(queryParam, values);
-            if (!resolveStatQueryAnnotations && entity != null) {
-                requestFields.put(queryParam, fieldClass);
-                joinTables.put(entity.name(), joinColumn);
-            }
+            resolveIndividualMatchingQueryField(requestFields,
+                    requestParamFilter,
+                    joinTables,
+                    columnName,
+                    queryParam,
+                    isPresent,
+                    isEntity,
+                    values,
+                    field);
             if (resolveStatQueryAnnotations) {
                 StatQuery.MedianQuery[] medianQueries = field.getAnnotationsByType(StatQuery.MedianQuery.class);
                 StatQuery.ColumnQuery[] columnQueries = field.getAnnotationsByType(StatQuery.ColumnQuery.class);
@@ -1072,6 +1056,51 @@ public class QueryArmoury {
                 requestFields.put(queryParam, occurrenceQueries);
                 requestFields.put(queryParam, percentageChangeQueries);
             }
+        }
+    }
+
+    void resolveIndividualMatchingQueryField(MultiValuedMap<String, Object> requestFields,
+               RequestParamFilter requestParamFilter,
+               Map<String, JoinColumn> joinTables,
+               String columnName,
+               String queryParam,
+               boolean isPresent,
+               boolean isEntity,
+               String[] values,
+               Field field) {
+        Entity entity = null;
+        Class<?> fieldClass = null;
+        JoinColumn joinColumn = null;
+        if (isEntity) {
+            fieldClass = field.getType();
+            entity = fieldClass.getAnnotation(Entity.class);
+            if (entity != null) {
+                columnName = String.format("%s_entity.%s", entity.name(),
+                        queryParam.substring(queryParam.indexOf(".")+1));
+            }
+            Field actualSubField = null;
+            String[] nameParts = queryParam.split("\\.");
+            joinColumn = field.getAnnotation(JoinColumn.class);
+            String actualFieldName = nameParts[nameParts.length-1];
+            actualSubField = FieldUtil.getDeclaredField(fieldClass, isSnakeCase
+                    ? FieldUtil.toCamelCase(actualFieldName)
+                    : actualFieldName);
+            if (actualSubField == null) {
+                actualSubField = FieldUtil.getDeclaredField(fieldClass, actualFieldName);
+            }
+            if (actualSubField != null) {
+                RequestParamFilter actualRequestParamFilter = actualSubField.getAnnotation(RequestParamFilter.class);
+                if (actualRequestParamFilter != null) requestParamFilter = actualRequestParamFilter;
+            }
+        }
+
+        requestFields.put(queryParam, columnName);
+        requestFields.put(queryParam, isPresent);
+        requestFields.put(queryParam, requestParamFilter);
+        requestFields.put(queryParam, values);
+        if (entity != null) {
+            requestFields.put(queryParam, fieldClass);
+            joinTables.put(entity.name(), joinColumn);
         }
     }
 
